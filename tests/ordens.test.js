@@ -65,3 +65,20 @@ test('scanQR com qr2_code avança para ENTREGUE', () => {
 test('scanQR com QR desconhecido lança erro', () => {
   expect(() => ordens.scanQR('uuid-invalido')).toThrow('QR code não encontrado')
 })
+
+test('atualizarStatus lança erro para ID inexistente', () => {
+  expect(() => ordens.atualizarStatus(9999, 'CHAMADO')).toThrow('Ordem 9999 não encontrada')
+})
+
+test('scanQR com qr1_code em status errado lança erro', () => {
+  const o = ordens.criarOrdem({ itens: [], total: 5, chaveNfce: null, origem: 'totem' })
+  // Status NOVO — ainda não está SEPARANDO
+  expect(() => ordens.scanQR(o.qr1Code)).toThrow(/QR1 inválido/)
+})
+
+test('scanQR com qr2_code em status errado lança erro', () => {
+  const o = ordens.criarOrdem({ itens: [], total: 5, chaveNfce: null, origem: 'totem' })
+  ordens.atualizarStatus(o.id, 'SEPARANDO')
+  // Status SEPARANDO — ainda não está CHAMADO
+  expect(() => ordens.scanQR(o.qr2Code)).toThrow(/QR2 inválido/)
+})

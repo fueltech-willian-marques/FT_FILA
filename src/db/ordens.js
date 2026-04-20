@@ -62,7 +62,8 @@ function buscarPorId(id) {
  * Atualiza status de uma ordem.
  */
 function atualizarStatus(id, novoStatus) {
-  db.prepare(`UPDATE ordens SET status = ?, atualizado_em = ? WHERE id = ?`).run(novoStatus, AGORA(), id)
+  const result = db.prepare(`UPDATE ordens SET status = ?, atualizado_em = ? WHERE id = ?`).run(novoStatus, AGORA(), id)
+  if (result.changes === 0) throw new Error(`Ordem ${id} não encontrada`)
   return buscarPorId(id)
 }
 
@@ -71,16 +72,22 @@ function atualizarStatus(id, novoStatus) {
  * Retorna { id, senha, status, acao }.
  */
 function scanQR(qrCode) {
-  // Tenta QR1 (separação)
+  // Tenta QR1 (separação) — válido apenas no status SEPARANDO
   const porQR1 = db.prepare(`SELECT * FROM ordens WHERE qr1_code = ?`).get(qrCode)
   if (porQR1) {
+    if (porQR1.status !== 'SEPARANDO') {
+      throw new Error(`QR1 inválido: ordem ${porQR1.id} está em status ${porQR1.status}`)
+    }
     atualizarStatus(porQR1.id, 'CHAMADO')
     return { id: porQR1.id, senha: porQR1.senha, status: 'CHAMADO', acao: 'chamado_na_tv', qr2Code: porQR1.qr2_code }
   }
 
-  // Tenta QR2 (entrega)
+  // Tenta QR2 (entrega) — válido apenas no status CHAMADO
   const porQR2 = db.prepare(`SELECT * FROM ordens WHERE qr2_code = ?`).get(qrCode)
   if (porQR2) {
+    if (porQR2.status !== 'CHAMADO') {
+      throw new Error(`QR2 inválido: ordem ${porQR2.id} está em status ${porQR2.status}`)
+    }
     atualizarStatus(porQR2.id, 'ENTREGUE')
     return { id: porQR2.id, senha: porQR2.senha, status: 'ENTREGUE', acao: 'entregue' }
   }
