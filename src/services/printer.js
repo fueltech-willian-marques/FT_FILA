@@ -18,24 +18,28 @@ function line(ch = '-')   { return txt(ch.repeat(COLS)) }
 function center(s, width) { const w = width || COLS; const pad = Math.max(0, Math.floor((w - s.length) / 2)); return txt(' '.repeat(pad) + s) }
 
 // ── Porta serial ──────────────────────────────────────────────────────────────
-let _port = null
+let _portPromise = null
 
 function getPort() {
-  if (_port && _port.isOpen) return _port
-  _port = new SerialPort({
-    path:     settings.impressora.porta,
-    baudRate: settings.impressora.baudRate,
-    autoOpen: false,
+  if (_portPromise) return _portPromise
+  _portPromise = new Promise((resolve, reject) => {
+    const port = new SerialPort({
+      path:     settings.impressora.porta,
+      baudRate: settings.impressora.baudRate,
+      autoOpen: false,
+    })
+    port.open((err) => {
+      if (err) { _portPromise = null; console.error('[printer] Erro ao abrir porta:', err.message); return reject(err) }
+      resolve(port)
+    })
   })
-  _port.open((err) => { if (err) console.error('[printer] Erro ao abrir porta:', err.message) })
-  return _port
+  return _portPromise
 }
 
 async function printBuf(buffers) {
-  const port = getPort()
+  const port = await getPort()
   const data = Buffer.concat(buffers.filter(Boolean))
   return new Promise((resolve, reject) => {
-    if (!port.isOpen) return reject(new Error(`Porta ${settings.impressora.porta} não aberta`))
     port.write(data, (err) => {
       if (err) return reject(err)
       port.drain(resolve)
@@ -55,6 +59,8 @@ async function printListaSeparacao(ordem) {
   const hora = new Date().toTimeString().slice(0, 5)
   const qrBuf = await bufQRRaster(qr1Code, 4)
 
+  const totalStr = Number(total).toFixed(2)
+
   await printBuf([
     CENTER, BOLD_ON, txt('FUELTECH - SEPARACAO'), BOLD_OFF,
     LEFT, line(),
@@ -68,7 +74,7 @@ async function printListaSeparacao(ordem) {
       return txt(`  ${String(it.quantidade || it.qty || 1)}x ${desc} ${valor}`)
     }),
     line('-'),
-    txt(`TOTAL:${''.padEnd(COLS - 6 - String(Number(total).toFixed(2)).length)}R$ ${Number(total).toFixed(2)}`),
+    txt(`TOTAL:${''.padEnd(COLS - 6 - 3 - totalStr.length)}R$ ${totalStr}`),
     line(),
     CENTER, txt('Escaneie o QR apos separar:'),
     qrBuf,
