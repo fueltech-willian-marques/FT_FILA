@@ -138,6 +138,7 @@ router.post('/:id/cancelar', (req, res) => {
     getIO()?.emit('fila:atualizada', { filaId: id, senha: ordem.senha, status: 'NOVO' })
     return res.json({ ok: true, status: 'NOVO' })
   } catch (err) {
+    if (err.message.includes('não encontrada')) return res.status(404).json({ ok: false, error: err.message })
     return res.status(500).json({ ok: false, error: err.message })
   }
 })
