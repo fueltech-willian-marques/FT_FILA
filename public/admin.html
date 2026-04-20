@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FT_FILA — Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 20px; }
+  .actions { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-danger  { background: #dc2626; color: #fff; }
+  .btn-default { background: #2a2d3e; color: #ccc; }
+  .btn:hover { opacity: 0.8; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: #666; padding: 8px 10px; border-bottom: 1px solid #2a2d3e; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1e2132; vertical-align: top; }
+  tr:hover td { background: #1a1d27; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+  .NOVO      { background: #1b3a5c; color: #60a5fa; }
+  .SEPARANDO { background: #3d1f00; color: #f59e0b; }
+  .CHAMADO   { background: #001a0d; color: #10b981; }
+  .ENTREGUE  { background: #1f2937; color: #6b7280; }
+  .msg { color: #10b981; font-size: 13px; margin-bottom: 12px; display: none; }
+</style>
+</head>
+<body>
+<h1>⚙️ FT_FILA — Admin</h1>
+
+<div class="actions">
+  <button class="btn btn-danger" onclick="resetContador()">🔄 Resetar contador do dia</button>
+  <button class="btn btn-default" onclick="carregar()">↺ Atualizar</button>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<table>
+  <thead>
+    <tr><th>Senha</th><th>Status</th><th>Total</th><th>Origem</th><th>Criado em</th><th>Ações</th></tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<script>
+  function showMsg(m) { const el = document.getElementById('msg'); el.textContent = m; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500) }
+
+  async function carregar() {
+    const ordens = await fetch('/api/fila/todas').then(r => r.json())
+    document.getElementById('tbody').innerHTML = ordens.map(o => `
+      <tr>
+        <td><strong>${o.senha}</strong></td>
+        <td><span class="chip ${o.status}">${o.status}</span></td>
+        <td>R$ ${Number(o.total || 0).toFixed(2)}</td>
+        <td>${o.origem}</td>
+        <td>${new Date(o.criado_em).toLocaleTimeString('pt-BR')}</td>
+        <td>${o.status !== 'ENTREGUE' ? `<button class="btn btn-default" style="padding:4px 10px;font-size:11px" onclick="cancelar(${o.id})">Cancelar</button>` : ''}</td>
+      </tr>`).join('')
+  }
+
+  async function resetContador() {
+    if (!confirm('Resetar contador do dia? Próxima senha será A-001.')) return
+    await fetch('/api/fila/reset-contador', { method: 'POST' })
+    showMsg('Contador resetado — próxima senha: A-001')
+  }
+
+  async function cancelar(id) {
+    await fetch(`/api/fila/${id}/cancelar`, { method: 'POST' })
+    showMsg(`Ordem #${id} cancelada`)
+    carregar()
+  }
+
+  carregar()
+</script>
+</body>
+</html>

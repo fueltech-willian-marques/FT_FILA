@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuelTech — Expedição</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif; min-height: 100vh; }
+  header { background: #e52e2e; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 900; }
+  header .sub { opacity: 0.85; font-size: 13px; }
+  .scan-status { margin-left: auto; background: rgba(0,0,0,0.3); padding: 6px 14px; border-radius: 20px; font-size: 12px; }
+
+  main { padding: 20px 24px; }
+  h2 { font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+
+  .card {
+    background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card.separando { border-color: #d97706; }
+
+  .card-header { display: flex; align-items: center; gap: 10px; }
+  .senha-badge { background: #e52e2e; color: #fff; font-size: 20px; font-weight: 900;
+                 padding: 4px 14px; border-radius: 8px; letter-spacing: 2px; }
+  .card-meta { font-size: 11px; color: #666; }
+
+  .itens { list-style: none; }
+  .itens li { display: flex; justify-content: space-between; font-size: 12px;
+               color: #ccc; padding: 3px 0; border-bottom: 1px solid #1e2132; }
+  .itens li:last-child { border-bottom: none; }
+
+  .total-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;
+               color: #fff; padding-top: 6px; }
+
+  .card-actions { display: flex; gap: 8px; }
+  .btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 12px; font-weight: 700;
+         cursor: pointer; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.8; }
+  .btn-print { background: #7c3aed; color: #fff; flex: 1; }
+  .btn-print:disabled { background: #2d2d2d; color: #555; cursor: default; }
+
+  .status-chip { font-size: 10px; padding: 2px 10px; border-radius: 20px; font-weight: 700; }
+  .status-NOVO      { background: #1b3a5c; color: #60a5fa; }
+  .status-SEPARANDO { background: #3d1f00; color: #f59e0b; }
+
+  .vazio { padding: 48px 24px; text-align: center; color: #444; font-size: 16px; }
+
+  /* Scanner input oculto — captura teclado do scanner USB HID automaticamente */
+  #scanner-input { position: fixed; opacity: 0; width: 1px; height: 1px; top: -100px; left: -100px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #10b981; color: #fff;
+           padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px;
+           display: none; z-index: 999; }
+  .toast.error { background: #dc2626; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📦 EXPEDIÇÃO</h1>
+  <div class="sub">FuelTech — Painel de Separação</div>
+  <div class="scan-status" id="scan-status">🔌 Scanner pronto</div>
+</header>
+
+<!-- Scanner USB HID — foco automático -->
+<input id="scanner-input" autocomplete="off" />
+
+<main>
+  <h2>Ordens aguardando separação</h2>
+  <div class="grid" id="grid"><div class="vazio">Nenhuma ordem no momento</div></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io()
+  let ordens = []
+
+  // ── Renderização ──────────────────────────────────────────────────────────
+  function timeAgo(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso)) / 60000)
+    return diff < 1 ? 'agora' : `${diff}min atrás`
+  }
+
+  function renderCards(lista) {
+    ordens = lista
+    const grid = document.getElementById('grid')
+    if (!lista.length) { grid.innerHTML = '<div class="vazio">Nenhuma ordem no momento</div>'; return }
+    grid.innerHTML = lista.map(o => {
+      const itensArr = JSON.parse(o.itens || '[]')
+      const isSep = o.status === 'SEPARANDO'
+      return `
+        <div class="card ${isSep ? 'separando' : ''}" data-id="${o.id}">
+          <div class="card-header">
+            <div class="senha-badge">${o.senha}</div>
+            <div>
+              <div class="card-meta">${timeAgo(o.criado_em)}</div>
+              <span class="status-chip status-${o.status}">${o.status}</span>
+            </div>
+          </div>
+          <ul class="itens">
+            ${itensArr.map(it => `
+              <li>
+                <span>${it.quantidade || it.qty || 1}x ${(it.descricao || it.B1_DESC || '').substring(0, 30)}</span>
+                <span>R$ ${((it.vrUnit || it.PRECO || 0) * (it.quantidade || it.qty || 1)).toFixed(2)}</span>
+              </li>`).join('')}
+          </ul>
+          <div class="total-row"><span>Total</span><span>R$ ${Number(o.total).toFixed(2)}</span></div>
+          <div class="card-actions">
+            <button class="btn btn-print" onclick="imprimirLista(${o.id})" ${isSep ? 'disabled' : ''}>
+              ${isSep ? '✓ Lista impressa — aguardando scan QR1' : '🖨️ Imprimir Lista de Separação'}
+            </button>
+          </div>
+        </div>`
+    }).join('')
+  }
+
+  function carregarOrdens() {
+    fetch('/api/fila').then(r => r.json()).then(renderCards)
+  }
+
+  // ── Ações ─────────────────────────────────────────────────────────────────
+  async function imprimirLista(id) {
+    const btn = document.querySelector(`[data-id="${id}"] .btn-print`)
+    if (btn) { btn.disabled = true; btn.textContent = 'Imprimindo...' }
+    const res = await fetch(`/api/fila/${id}/imprimir-lista`, { method: 'POST' })
+    if (res.ok) { showToast('Lista impressa — escaneie o QR1 após separar') }
+    else { showToast('Erro ao imprimir', true) }
+    carregarOrdens()
+  }
+
+  // ── Scanner USB HID ───────────────────────────────────────────────────────
+  const scannerInput = document.getElementById('scanner-input')
+
+  // Mantém o foco no input oculto (qualquer clique na página refoca)
+  document.addEventListener('click', () => scannerInput.focus())
+  scannerInput.focus()
+
+  let buffer = ''
+  let bufTimer = null
+
+  scannerInput.addEventListener('input', () => {
+    buffer += scannerInput.value
+    scannerInput.value = ''
+    clearTimeout(bufTimer)
+    // Scanner envia dados rápido — aguarda 100ms de silêncio para confirmar leitura completa
+    bufTimer = setTimeout(async () => {
+      const qrCode = buffer.trim()
+      buffer = ''
+      if (!qrCode) return
+
+      document.getElementById('scan-status').textContent = `📡 Processando...`
+      const res = await fetch('/api/fila/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qrCode }),
+      })
+      const data = await res.json()
+      if (res.ok && data.status === 'CHAMADO') {
+        showToast(`✅ Senha ${data.senha} chamada no painel TV!`)
+        document.getElementById('scan-status').textContent = '🔌 Scanner pronto'
+      } else {
+        showToast(data.error || 'QR não reconhecido', true)
+        document.getElementById('scan-status').textContent = '🔌 Scanner pronto'
+      }
+    }, 100)
+  })
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast')
+    t.textContent = msg
+    t.className = 'toast' + (isError ? ' error' : '')
+    t.style.display = 'block'
+    setTimeout(() => { t.style.display = 'none' }, 3500)
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  socket.on('fila:nova',       carregarOrdens)
+  socket.on('fila:atualizada', carregarOrdens)
+  socket.on('fila:entregue',   carregarOrdens)
+
+  // Carrega ao iniciar
+  carregarOrdens()
+</script>
+</body>
+</html>

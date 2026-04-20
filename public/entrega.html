@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuelTech — Entrega</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: #059669; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 900; }
+  header .sub { opacity: 0.85; font-size: 13px; }
+
+  .scanner-area {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; gap: 16px; padding: 32px;
+  }
+  .scanner-icon { font-size: 80px; opacity: 0.3; }
+  .scanner-msg { font-size: 22px; color: #555; }
+  .scanner-hint { font-size: 14px; color: #333; }
+
+  /* Confirmação de entrega */
+  .entrega-card {
+    background: #001a0d; border: 2px solid #10b981; border-radius: 16px;
+    padding: 24px 32px; text-align: center; max-width: 420px; width: 100%;
+    display: none;
+  }
+  .entrega-senha { font-size: 64px; font-weight: 900; color: #10b981; letter-spacing: 4px; }
+  .entrega-msg { font-size: 18px; color: #6ee7b7; margin-top: 8px; }
+  .entrega-itens { text-align: left; margin-top: 16px; font-size: 13px; color: #9ca3af; }
+  .entrega-itens li { padding: 3px 0; border-bottom: 1px solid #0d2318; }
+
+  /* Histórico */
+  .historico { padding: 16px 24px; border-top: 1px solid #1a1d27; }
+  .historico h3 { font-size: 13px; color: #555; margin-bottom: 10px; text-transform: uppercase; }
+  .hist-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+  .hist-chip { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 6px;
+               padding: 4px 12px; font-size: 13px; color: #555; }
+
+  #scanner-input { position: fixed; opacity: 0; width: 1px; height: 1px; top: -100px; left: -100px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>✅ ENTREGA</h1>
+  <div class="sub">FuelTech — Confirmação de Entrega</div>
+</header>
+
+<input id="scanner-input" autocomplete="off" />
+
+<div class="scanner-area">
+  <div class="scanner-icon">📷</div>
+  <div class="scanner-msg">Aguardando leitura do QR Code</div>
+  <div class="scanner-hint">Escaneie o QR2 da sacola do cliente para confirmar a entrega</div>
+
+  <div class="entrega-card" id="entrega-card">
+    <div class="entrega-senha" id="entrega-senha">--</div>
+    <div class="entrega-msg">✅ Entrega confirmada!</div>
+    <ul class="entrega-itens" id="entrega-itens"></ul>
+  </div>
+</div>
+
+<div class="historico">
+  <h3>Entregues hoje</h3>
+  <div class="hist-lista" id="hist-lista"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io()
+  const historico = []
+
+  // ── Scanner USB HID ───────────────────────────────────────────────────────
+  const scannerInput = document.getElementById('scanner-input')
+  document.addEventListener('click', () => scannerInput.focus())
+  scannerInput.focus()
+
+  let buffer = ''
+  let bufTimer = null
+
+  scannerInput.addEventListener('input', () => {
+    buffer += scannerInput.value
+    scannerInput.value = ''
+    clearTimeout(bufTimer)
+    bufTimer = setTimeout(async () => {
+      const qrCode = buffer.trim()
+      buffer = ''
+      if (!qrCode) return
+
+      const res  = await fetch('/api/fila/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qrCode }),
+      })
+      const data = await res.json()
+
+      if (res.ok && data.status === 'ENTREGUE') {
+        mostrarConfirmacao(data)
+        adicionarHistorico(data.senha)
+      } else {
+        document.querySelector('.scanner-msg').textContent = data.error || 'QR não reconhecido'
+        setTimeout(() => { document.querySelector('.scanner-msg').textContent = 'Aguardando leitura do QR Code' }, 2000)
+      }
+    }, 100)
+  })
+
+  function mostrarConfirmacao(data) {
+    const card = document.getElementById('entrega-card')
+    document.getElementById('entrega-senha').textContent = data.senha
+    card.style.display = 'block'
+    document.querySelector('.scanner-icon').style.display = 'none'
+    document.querySelector('.scanner-msg').textContent = ''
+    setTimeout(() => {
+      card.style.display = 'none'
+      document.querySelector('.scanner-icon').style.display = 'block'
+      document.querySelector('.scanner-msg').textContent = 'Aguardando leitura do QR Code'
+    }, 4000)
+  }
+
+  function adicionarHistorico(senha) {
+    historico.unshift(senha)
+    const lista = document.getElementById('hist-lista')
+    lista.innerHTML = historico.slice(0, 20).map(s =>
+      `<div class="hist-chip">✓ ${s}</div>`
+    ).join('')
+  }
+
+  socket.on('connect', () => console.log('[ws] conectado'))
+</script>
+</body>
+</html>
