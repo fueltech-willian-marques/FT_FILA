@@ -4,139 +4,317 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FuelTech — Expedição</title>
+<script src="https://unpkg.com/lucide@0.525.0/dist/umd/lucide.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif; min-height: 100vh; }
-  header { background: #e52e2e; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 20px; font-weight: 900; }
-  header .sub { opacity: 0.85; font-size: 13px; }
-  .scan-status { margin-left: auto; background: rgba(0,0,0,0.3); padding: 6px 14px; border-radius: 20px; font-size: 12px; }
+  body { background: #f0f0f0; color: #111; font-family: 'Segoe UI', Arial, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; }
 
-  main { padding: 20px 24px; }
-  h2 { font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  header { background: #e52e2e; padding: 12px 20px; display: flex; align-items: center;
+           gap: 12px; color: #fff; flex-shrink: 0; }
+  header .logo { height: 28px; width: auto; object-fit: contain; }
+  header .divider { width: 1px; height: 26px; background: rgba(255,255,255,0.3); }
+  header h1 { font-size: 18px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+  header .sub { opacity: 0.8; font-size: 12px; margin-left: 4px; }
+  .scan-status { margin-left: auto; background: rgba(0,0,0,0.2); padding: 5px 12px;
+                 border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 5px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  /* ── Main ───────────────────────────────────────────────────────────────── */
+  main { flex: 1; padding: 14px; overflow-x: auto; overflow-y: auto; }
 
-  .card {
-    background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 16px;
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .card.separando { border-color: #d97706; }
+  #colunas { display: grid; gap: 12px; align-items: start; }
 
-  .card-header { display: flex; align-items: center; gap: 10px; }
-  .senha-badge { background: #e52e2e; color: #fff; font-size: 20px; font-weight: 900;
-                 padding: 4px 14px; border-radius: 8px; letter-spacing: 2px; }
-  .card-meta { font-size: 11px; color: #666; }
+  /* ── Column ─────────────────────────────────────────────────────────────── */
+  .coluna { background: #fff; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08); min-width: 220px; }
 
-  .itens { list-style: none; }
-  .itens li { display: flex; justify-content: space-between; font-size: 12px;
-               color: #ccc; padding: 3px 0; border-bottom: 1px solid #1e2132; }
-  .itens li:last-child { border-bottom: none; }
+  .col-header { background: #1f2937; color: #fff; padding: 10px 14px;
+                display: flex; align-items: center; gap: 7px;
+                font-size: 13px; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 0.5px; }
 
-  .total-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;
-               color: #fff; padding-top: 6px; }
+  .col-content { padding: 12px; min-height: 130px; }
 
-  .card-actions { display: flex; gap: 8px; }
-  .btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 12px; font-weight: 700;
-         cursor: pointer; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.8; }
-  .btn-print { background: #7c3aed; color: #fff; flex: 1; }
-  .btn-print:disabled { background: #2d2d2d; color: #555; cursor: default; }
+  /* ── Order card ─────────────────────────────────────────────────────────── */
+  .ordem-card { background: #fff8f0; border: 1px solid #f59e0b;
+                border-left: 4px solid #f59e0b; border-radius: 8px; padding: 12px; }
 
-  .status-chip { font-size: 10px; padding: 2px 10px; border-radius: 20px; font-weight: 700; }
-  .status-NOVO      { background: #1b3a5c; color: #60a5fa; }
-  .status-SEPARANDO { background: #3d1f00; color: #f59e0b; }
+  .senha-badge { background: #e52e2e; color: #fff; font-size: 22px; font-weight: 900;
+                 padding: 4px 14px; border-radius: 6px; letter-spacing: 2px;
+                 display: inline-block; margin-bottom: 8px; }
 
-  .vazio { padding: 48px 24px; text-align: center; color: #444; font-size: 16px; }
+  .card-meta { font-size: 10px; color: #888; margin-bottom: 8px; }
 
-  /* Scanner input oculto — captura teclado do scanner USB HID automaticamente */
+  .itens-lista { list-style: none; margin-bottom: 8px; }
+  .itens-lista li { display: flex; justify-content: space-between;
+                    font-size: 11px; color: #444; padding: 2px 0;
+                    border-bottom: 1px solid #f5f5f5; }
+  .itens-lista li:last-child { border-bottom: none; }
+  .item-desc { flex: 1; margin-right: 8px; overflow: hidden; white-space: nowrap;
+               text-overflow: ellipsis; }
+  .item-val { white-space: nowrap; font-weight: 600; }
+
+  .total-linha { display: flex; justify-content: space-between; font-weight: 700;
+                 font-size: 13px; padding-top: 6px; border-top: 1px solid #e5e7eb;
+                 margin-top: 4px; }
+
+  .status-label { display: inline-flex; align-items: center; gap: 5px;
+                  font-size: 10px; color: #92400e; background: #fef3c7;
+                  padding: 3px 8px; border-radius: 12px; margin-top: 8px;
+                  font-weight: 600; }
+
+  /* ── Awaiting placeholder ───────────────────────────────────────────────── */
+  .aguardando { display: flex; flex-direction: column; align-items: center;
+                justify-content: center; padding: 32px 12px; color: #9ca3af;
+                text-align: center; }
+  .aguardando .msg { font-size: 12px; font-weight: 600; margin-top: 10px; }
+  .aguardando .sub { font-size: 10px; color: #c0c0c0; margin-top: 4px; }
+
+  /* ── Footer ─────────────────────────────────────────────────────────────── */
+  footer { background: #1f2937; color: #fff; padding: 10px 20px;
+           display: flex; align-items: center; justify-content: center; gap: 12px;
+           flex-shrink: 0; }
+  footer .count { font-size: 28px; font-weight: 900; color: #fbbf24; line-height: 1; }
+  footer .label { font-size: 12px; opacity: 0.75; }
+  footer .footer-inner { display: flex; align-items: center; gap: 10px; }
+
+  /* ── Modal ──────────────────────────────────────────────────────────────── */
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+           display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-box { background: #fff; border-radius: 16px; padding: 32px 36px;
+               max-width: 460px; width: 90%; text-align: center; }
+  .modal-box h2 { font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+  .modal-box p  { font-size: 13px; color: #666; margin-bottom: 24px; line-height: 1.5; }
+  .op-buttons   { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .op-btn { width: 66px; height: 66px; border: 2px solid #e0e0e0; border-radius: 12px;
+            background: #fff; font-size: 26px; font-weight: 900; cursor: pointer;
+            transition: all 0.14s; color: #111; }
+  .op-btn:hover { background: #e52e2e; border-color: #e52e2e; color: #fff; transform: scale(1.06); }
+
+  /* ── Scanner hidden input ───────────────────────────────────────────────── */
   #scanner-input { position: fixed; opacity: 0; width: 1px; height: 1px; top: -100px; left: -100px; }
 
-  .toast { position: fixed; bottom: 24px; right: 24px; background: #10b981; color: #fff;
-           padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px;
+  /* ── Toast ──────────────────────────────────────────────────────────────── */
+  .toast { position: fixed; bottom: 64px; right: 20px; background: #10b981; color: #fff;
+           padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 13px;
            display: none; z-index: 999; }
   .toast.error { background: #dc2626; }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>📦 EXPEDIÇÃO</h1>
-  <div class="sub">FuelTech — Painel de Separação</div>
-  <div class="scan-status" id="scan-status">🔌 Scanner pronto</div>
+  <img src="/logo_fueltech.png" alt="FuelTech" class="logo" onerror="this.style.display='none'" />
+  <div class="divider"></div>
+  <h1><i data-lucide="package" style="width:20px;height:20px"></i> EXPEDIÇÃO</h1>
+  <span class="sub">Painel de Separação</span>
+  <div class="scan-status" id="scan-status">
+    <i data-lucide="scan-line" style="width:12px;height:12px"></i>&nbsp;Scanner pronto
+  </div>
 </header>
 
-<!-- Scanner USB HID — foco automático -->
-<input id="scanner-input" autocomplete="off" />
-
 <main>
-  <h2>Ordens aguardando separação</h2>
-  <div class="grid" id="grid"><div class="vazio">Nenhuma ordem no momento</div></div>
+  <div id="colunas"></div>
 </main>
 
+<footer>
+  <div class="footer-inner">
+    <i data-lucide="clock" style="width:20px;height:20px;opacity:0.6"></i>
+    <div>
+      <div class="count" id="fila-count">0</div>
+      <div class="label">na fila aguardando</div>
+    </div>
+  </div>
+</footer>
+
+<!-- Modal: número de operadores (uma vez por dia) -->
+<div id="modal">
+  <div class="modal-box">
+    <h2>Bom dia!</h2>
+    <p>Quantos operadores de separação<br>estão trabalhando hoje?</p>
+    <div class="op-buttons">
+      <button class="op-btn" onclick="selecionarOperadores(1)">1</button>
+      <button class="op-btn" onclick="selecionarOperadores(2)">2</button>
+      <button class="op-btn" onclick="selecionarOperadores(3)">3</button>
+      <button class="op-btn" onclick="selecionarOperadores(4)">4</button>
+      <button class="op-btn" onclick="selecionarOperadores(5)">5</button>
+      <button class="op-btn" onclick="selecionarOperadores(6)">6</button>
+      <button class="op-btn" onclick="selecionarOperadores(7)">7</button>
+      <button class="op-btn" onclick="selecionarOperadores(8)">8</button>
+    </div>
+  </div>
+</div>
+
+<input id="scanner-input" autocomplete="off" />
 <div class="toast" id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+  lucide.createIcons()
   const socket = io()
-  let ordens = []
 
-  // ── Renderização ──────────────────────────────────────────────────────────
-  function timeAgo(iso) {
-    const diff = Math.floor((Date.now() - new Date(iso)) / 60000)
-    return diff < 1 ? 'agora' : `${diff}min atrás`
+  // Identifica este painel como sala 'expedicao'
+  socket.emit('join-room', 'expedicao')
+
+  // Recebe solicitações de impressão do FT_FILA (Linux) e delega ao agente local
+  socket.on('fila:imprimir', async ({ tipo, dados }) => {
+    try {
+      const endpoint = tipo === 'lista' ? '/print/lista' : '/print/etiqueta'
+      const resp = await fetch(`http://localhost:4002${endpoint}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(dados),
+      })
+      if (!resp.ok) console.warn('[print] ft-fila-agent retornou', resp.status)
+    } catch (e) {
+      console.warn('[print] ft-fila-agent offline:', e.message)
+    }
+  })
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const STORAGE_KEY = `fila_operadores_${hoje}`
+
+  let numOperadores = 0
+  let ordensAtivas  = []
+  let naFila        = 0
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  function init() {
+    numOperadores = parseInt(localStorage.getItem(STORAGE_KEY) || '0')
+    if (!numOperadores) {
+      document.getElementById('modal').style.display = 'flex'
+      lucide.createIcons()
+      return
+    }
+    renderLayout()
+    carregarTudo().then(autoAssignAll)
   }
 
-  function renderCards(lista) {
-    ordens = lista
-    const grid = document.getElementById('grid')
-    if (!lista.length) { grid.innerHTML = '<div class="vazio">Nenhuma ordem no momento</div>'; return }
-    grid.innerHTML = lista.map(o => {
-      const itensArr = JSON.parse(o.itens || '[]')
-      const isSep = o.status === 'SEPARANDO'
+  function selecionarOperadores(n) {
+    numOperadores = n
+    localStorage.setItem(STORAGE_KEY, String(n))
+    document.getElementById('modal').style.display = 'none'
+    renderLayout()
+    carregarTudo().then(autoAssignAll)
+  }
+
+  // ── Layout de colunas ──────────────────────────────────────────────────────
+  function renderLayout() {
+    const grid = document.getElementById('colunas')
+    grid.style.gridTemplateColumns = `repeat(${numOperadores}, 1fr)`
+    grid.innerHTML = Array.from({ length: numOperadores }, (_, i) => {
+      const n = i + 1
       return `
-        <div class="card ${isSep ? 'separando' : ''}" data-id="${o.id}">
-          <div class="card-header">
-            <div class="senha-badge">${o.senha}</div>
-            <div>
-              <div class="card-meta">${timeAgo(o.criado_em)}</div>
-              <span class="status-chip status-${o.status}">${o.status}</span>
-            </div>
+        <div class="coluna" id="col-${n}">
+          <div class="col-header">
+            <i data-lucide="user" style="width:14px;height:14px"></i>
+            Operador ${n}
           </div>
-          <ul class="itens">
-            ${itensArr.map(it => `
-              <li>
-                <span>${it.quantidade || it.qty || 1}x ${(it.descricao || it.B1_DESC || '').substring(0, 30)}</span>
-                <span>R$ ${((it.vrUnit || it.PRECO || 0) * (it.quantidade || it.qty || 1)).toFixed(2)}</span>
-              </li>`).join('')}
-          </ul>
-          <div class="total-row"><span>Total</span><span>R$ ${Number(o.total).toFixed(2)}</span></div>
-          <div class="card-actions">
-            <button class="btn btn-print" onclick="imprimirLista(${o.id})" ${isSep ? 'disabled' : ''}>
-              ${isSep ? '✓ Lista impressa — aguardando scan QR1' : '🖨️ Imprimir Lista de Separação'}
-            </button>
-          </div>
+          <div class="col-content" id="content-${n}"></div>
         </div>`
     }).join('')
+    lucide.createIcons()
   }
 
-  function carregarOrdens() {
-    fetch('/api/fila').then(r => r.json()).then(renderCards)
+  // ── Dados ──────────────────────────────────────────────────────────────────
+  async function carregarTudo() {
+    try {
+      const [ordensData, filaData] = await Promise.all([
+        fetch('/api/fila').then(r => r.json()),
+        fetch('/api/fila/fila-count').then(r => r.json()),
+      ])
+      ordensAtivas = Array.isArray(ordensData) ? ordensData : []
+      naFila = filaData.total || 0
+      renderAll()
+    } catch (e) {
+      console.error('[expedicao] carregarTudo:', e)
+    }
   }
 
-  // ── Ações ─────────────────────────────────────────────────────────────────
-  async function imprimirLista(id) {
-    const btn = document.querySelector(`[data-id="${id}"] .btn-print`)
-    if (btn) { btn.disabled = true; btn.textContent = 'Imprimindo...' }
-    const res = await fetch(`/api/fila/${id}/imprimir-lista`, { method: 'POST' })
-    if (res.ok) { showToast('Lista impressa — escaneie o QR1 após separar') }
-    else { showToast('Erro ao imprimir', true) }
-    carregarOrdens()
+  // Chama backend para atribuir próxima ordem ao operador N (imprime automaticamente)
+  async function proximo(n) {
+    try {
+      const res  = await fetch(`/api/fila/operador/${n}/proximo`, { method: 'POST' })
+      const data = await res.json()
+      if (!data.ok) return
+      if (data.ordem) {
+        // Atualiza estado local imediatamente para resposta visual rápida
+        const idx = ordensAtivas.findIndex(o => o.id === data.ordem.id)
+        if (idx >= 0) ordensAtivas[idx] = data.ordem
+        else ordensAtivas.push(data.ordem)
+        naFila = Math.max(0, naFila - 1)
+      }
+      // Sempre re-renderiza a coluna (mostra nova ordem ou "aguardando")
+      renderColuna(n)
+      document.getElementById('fila-count').textContent = naFila
+    } catch (e) {
+      console.error(`[expedicao] proximo(${n}):`, e)
+    }
+  }
+
+  // Atribui próxima ordem para cada operador que não tem ordem ativa, sequencialmente
+  async function autoAssignAll() {
+    for (let n = 1; n <= numOperadores; n++) {
+      const temOrdem = ordensAtivas.some(o => o.operador === n && o.status === 'SEPARANDO')
+      if (!temOrdem) await proximo(n)
+    }
+  }
+
+  // ── Renderização ──────────────────────────────────────────────────────────
+  function renderAll() {
+    for (let n = 1; n <= numOperadores; n++) renderColuna(n)
+    document.getElementById('fila-count').textContent = naFila
+    lucide.createIcons()
+  }
+
+  function renderColuna(n) {
+    const el = document.getElementById(`content-${n}`)
+    if (!el) return
+    const ordem = ordensAtivas.find(o => o.operador === n && o.status === 'SEPARANDO')
+    el.innerHTML = ordem ? cardHtml(ordem) : aguardandoHtml()
+    lucide.createIcons()
+  }
+
+  function cardHtml(o) {
+    const itensArr = JSON.parse(o.itens || '[]')
+    const hora = new Date(o.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const itensHtml = itensArr.map(it => {
+      const desc = (it.B1_DESC || it.descricao || '').substring(0, 26)
+      const qty  = it.qty || it.quantidade || 1
+      const val  = ((it.PRECO || it.vrUnit || 0) * qty).toFixed(2)
+      return `<li>
+        <span class="item-desc">${qty}x ${desc}</span>
+        <span class="item-val">R$&nbsp;${val}</span>
+      </li>`
+    }).join('')
+    return `
+      <div class="ordem-card">
+        <div class="senha-badge">${o.senha}</div>
+        <div class="card-meta">Chegou às ${hora}</div>
+        <ul class="itens-lista">${itensHtml}</ul>
+        <div class="total-linha">
+          <span>Total</span>
+          <span>R$ ${Number(o.total).toFixed(2)}</span>
+        </div>
+        <div class="status-label">
+          <i data-lucide="clock" style="width:10px;height:10px"></i>
+          Aguardando scan QR1
+        </div>
+      </div>`
+  }
+
+  function aguardandoHtml() {
+    return `
+      <div class="aguardando">
+        <i data-lucide="inbox" style="width:38px;height:38px;color:#d1d5db"></i>
+        <div class="msg">Aguardando próxima venda</div>
+        <div class="sub">A impressão ocorre automaticamente</div>
+      </div>`
   }
 
   // ── Scanner USB HID ───────────────────────────────────────────────────────
   const scannerInput = document.getElementById('scanner-input')
-
-  // Mantém o foco no input oculto (qualquer clique na página refoca)
   document.addEventListener('click', () => scannerInput.focus())
   scannerInput.focus()
 
@@ -147,45 +325,75 @@
     buffer += scannerInput.value
     scannerInput.value = ''
     clearTimeout(bufTimer)
-    // Scanner envia dados rápido — aguarda 100ms de silêncio para confirmar leitura completa
     bufTimer = setTimeout(async () => {
       const qrCode = buffer.trim()
       buffer = ''
       if (!qrCode) return
 
-      document.getElementById('scan-status').textContent = `📡 Processando...`
-      const res = await fetch('/api/fila/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qrCode }),
-      })
-      const data = await res.json()
-      if (res.ok && data.status === 'CHAMADO') {
-        showToast(`✅ Senha ${data.senha} chamada no painel TV!`)
-        document.getElementById('scan-status').textContent = '🔌 Scanner pronto'
-      } else {
-        showToast(data.error || 'QR não reconhecido', true)
-        document.getElementById('scan-status').textContent = '🔌 Scanner pronto'
+      const statusEl = document.getElementById('scan-status')
+      statusEl.innerHTML = '<i data-lucide="loader-2" style="width:12px;height:12px"></i>&nbsp;Processando...'
+      lucide.createIcons()
+
+      try {
+        const res  = await fetch('/api/fila/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qrCode }),
+        })
+        const data = await res.json()
+
+        if (res.ok && data.status === 'CHAMADO') {
+          showToast(`Senha ${data.senha} chamada no painel TV`)
+        } else if (res.ok && data.status === 'ENTREGUE') {
+          showToast(`Senha ${data.senha} entregue`)
+        } else {
+          showToast(data.error || 'QR não reconhecido', true)
+        }
+      } catch (e) {
+        console.error('[scanner] Erro ao processar QR:', e)
+        showToast('Erro de conexão com servidor', true)
+      } finally {
+        statusEl.innerHTML = '<i data-lucide="scan-line" style="width:12px;height:12px"></i>&nbsp;Scanner pronto'
+        lucide.createIcons()
       }
     }, 100)
+  })
+
+  // ── Socket.IO ─────────────────────────────────────────────────────────────
+  socket.on('fila:nova', async () => {
+    await carregarTudo()
+    await autoAssignAll()
+  })
+  socket.on('fila:atualizada', carregarTudo)
+  socket.on('fila:entregue',   carregarTudo)
+
+  // QR1 escaneado → operador ficou livre → atribui próxima ordem
+  socket.on('fila:operador-livre', async ({ operador }) => {
+    // Atualiza estado local: remove a ordem SEPARANDO do operador (foi para CHAMADO)
+    ordensAtivas = ordensAtivas.map(o =>
+      (o.operador === operador && o.status === 'SEPARANDO')
+        ? { ...o, status: 'CHAMADO' }
+        : o
+    )
+    renderColuna(operador)  // mostra "aguardando" imediatamente
+    await proximo(operador) // atribui próxima (imprime + atualiza coluna)
+    // Atualiza contador (fila:atualizada virá do backend, mas antecipa visualmente)
+    const filaData = await fetch('/api/fila/fila-count').then(r => r.json()).catch(() => ({ total: naFila }))
+    naFila = filaData.total || 0
+    document.getElementById('fila-count').textContent = naFila
   })
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   function showToast(msg, isError = false) {
     const t = document.getElementById('toast')
     t.textContent = msg
-    t.className = 'toast' + (isError ? ' error' : '')
+    t.className   = 'toast' + (isError ? ' error' : '')
     t.style.display = 'block'
     setTimeout(() => { t.style.display = 'none' }, 3500)
   }
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
-  socket.on('fila:nova',       carregarOrdens)
-  socket.on('fila:atualizada', carregarOrdens)
-  socket.on('fila:entregue',   carregarOrdens)
-
-  // Carrega ao iniciar
-  carregarOrdens()
+  // ── Start ─────────────────────────────────────────────────────────────────
+  init()
 </script>
 </body>
 </html>
