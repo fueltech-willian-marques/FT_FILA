@@ -4,24 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FuelTech — Painel de Senhas</title>
+<script src="https://unpkg.com/lucide@0.525.0/dist/umd/lucide.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', Arial, sans-serif;
+  body { background: #f5f5f5; color: #111; font-family: 'Segoe UI', Arial, sans-serif;
          height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-  header { background: #e52e2e; padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 28px; font-weight: 900; letter-spacing: 2px; }
-  header .hora { margin-left: auto; font-size: 22px; font-weight: 700; opacity: 0.9; }
+  header { background: #e52e2e; padding: 14px 32px; display: flex; align-items: center; gap: 16px; color: #fff; }
+  header .logo { height: 38px; width: auto; object-fit: contain; mix-blend-mode: multiply; }
+  header .divider { width: 1px; height: 36px; background: rgba(255,255,255,0.3); }
+  header .title { font-size: 20px; font-weight: 900; letter-spacing: 2px; opacity: 0.95; }
+  header .hora { margin-left: auto; font-size: 26px; font-weight: 900; opacity: 0.95; letter-spacing: 2px; }
 
-  .cols { display: flex; flex: 1; overflow: hidden; }
+  .cols { display: flex; flex: 1; overflow: hidden; gap: 1px; background: #e0e0e0; }
 
-  .col { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #1a1a1a; }
-  .col:last-child { border-right: none; }
+  .col { flex: 1; display: flex; flex-direction: column; background: #f5f5f5; }
 
-  .col-header { padding: 14px 24px; font-size: 16px; font-weight: 700; letter-spacing: 1.5px;
-                text-transform: uppercase; }
-  .col-header.separando { background: #1a1200; color: #f59e0b; border-bottom: 2px solid #f59e0b; }
-  .col-header.chamado   { background: #001a0d; color: #10b981; border-bottom: 2px solid #10b981; }
+  .col-header { padding: 16px 24px; font-size: 17px; font-weight: 800; letter-spacing: 1.5px;
+                text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .col-header.separando { background: #fffbeb; color: #b45309; border-bottom: 3px solid #f59e0b; }
+  .col-header.chamado   { background: #f0fdf4; color: #065f46; border-bottom: 3px solid #10b981; }
 
   .senhas { flex: 1; overflow: hidden; display: flex; flex-wrap: wrap; align-content: flex-start;
             gap: 12px; padding: 20px 24px; }
@@ -33,33 +35,55 @@
     border-radius: 12px;
     animation: fadeIn 0.4s ease;
   }
-  .senha-chip.separando { background: #1a1200; color: #f59e0b; border: 2px solid #f59e0b44; }
-  .senha-chip.chamado   { background: #001a0d; color: #10b981; border: 2px solid #10b98144; }
+  .senha-chip.separando {
+    background: #fffbeb; color: #b45309;
+    border: 2px solid #f59e0b; box-shadow: 0 2px 8px rgba(245,158,11,0.15);
+  }
+  .senha-chip.chamado {
+    background: #f0fdf4; color: #065f46;
+    border: 2px solid #10b981; box-shadow: 0 2px 8px rgba(16,185,129,0.15);
+  }
 
   @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
-  .vazio { color: #333; font-size: 18px; padding: 32px 24px; }
+  @keyframes piscar {
+    0%,100% { background: #f0fdf4; color: #065f46; transform: scale(1); box-shadow: 0 2px 8px rgba(16,185,129,0.15); }
+    20%,60%  { background: #10b981; color: #fff;    transform: scale(1.08); box-shadow: 0 0 32px #10b981; }
+    40%,80%  { background: #34d399; color: #fff;    transform: scale(1.12); box-shadow: 0 0 48px #34d399; }
+  }
+  .senha-chip.piscando { animation: piscar 0.5s ease-in-out 8; }
+
+  .vazio { color: #bbb; font-size: 18px; padding: 32px 24px; }
+
+  .lucide { display: inline-block; vertical-align: middle; }
 </style>
 </head>
 <body>
 <header>
-  <h1>FUELTECH</h1>
-  <div>PAINEL DE SENHAS</div>
+  <img src="/logo_fueltech.png?v=4" alt="FuelTech" class="logo" onerror="this.style.display='none'" />
+  <div class="divider"></div>
+  <div class="title">PAINEL DE SENHAS</div>
   <div class="hora" id="hora">--:--</div>
 </header>
+
 <div class="cols">
   <div class="col">
-    <div class="col-header separando">⏳ Em Separação</div>
+    <div class="col-header separando">
+      <i data-lucide="clock" style="width:20px;height:20px"></i> Em Separação
+    </div>
     <div class="senhas" id="col-separando"><div class="vazio">Nenhuma ordem</div></div>
   </div>
   <div class="col">
-    <div class="col-header chamado">✅ Chamadas</div>
+    <div class="col-header chamado">
+      <i data-lucide="check-circle-2" style="width:20px;height:20px"></i> Chamadas
+    </div>
     <div class="senhas" id="col-chamado"><div class="vazio">Nenhuma ordem</div></div>
   </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+  lucide.createIcons()
   const socket = io()
 
   function renderSenha(senha, tipo) {
@@ -83,13 +107,21 @@
     else chamado.forEach(o => cha.appendChild(renderSenha(o.senha, 'chamado')))
   }
 
-  // Carrega estado inicial
   fetch('/api/fila/tv').then(r => r.json()).then(render)
 
-  // Atualizações em tempo real
   socket.on('fila:nova',       () => fetch('/api/fila/tv').then(r => r.json()).then(render))
   socket.on('fila:atualizada', () => fetch('/api/fila/tv').then(r => r.json()).then(render))
   socket.on('fila:entregue',   () => fetch('/api/fila/tv').then(r => r.json()).then(render))
+
+  // Rechamada — pisca o chip da senha na TV por 4 segundos
+  socket.on('fila:rechamada', ({ senha }) => {
+    const chip = [...document.querySelectorAll('.senha-chip')].find(el => el.dataset.senha === senha)
+    if (!chip) return
+    chip.classList.remove('piscando')
+    void chip.offsetWidth
+    chip.classList.add('piscando')
+    setTimeout(() => chip.classList.remove('piscando'), 4000)
+  })
 
   // Relógio
   function tick() { document.getElementById('hora').textContent = new Date().toTimeString().slice(0,5) }

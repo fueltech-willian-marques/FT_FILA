@@ -1,0 +1,22 @@
+{
+  "name": "ft-fila-agent",
+  "version": "1.0.0",
+  "description": "Agente local de impressão para painéis FT_FILA (expedição/entrega)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev":   "nodemon server.js"
+  },
+  "dependencies": {
+    "cors":       "^2.8.5",
+    "express":    "^4.19.2",
+    "qrcode":     "^1.5.4",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -31,4 +31,11 @@ db.exec(`
   );
 `)
 
+// Migration: adiciona coluna operador se ainda não existir
+const colunas = db.prepare(`PRAGMA table_info(ordens)`).all()
+if (!colunas.find(c => c.name === 'operador')) {
+  db.exec(`ALTER TABLE ordens ADD COLUMN operador INTEGER DEFAULT NULL`)
+  console.log('[db] Migration: coluna operador adicionada')
+}
+
 module.exports = db

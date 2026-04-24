@@ -1,7 +1,14 @@
 const express  = require('express')
 const ordens   = require('../db/ordens')
-const printer  = require('../services/printer')
+// printer removido — impressão delegada ao ft-fila-agent via WebSocket
 const { getIO } = require('../socket')  // singleton Socket.IO — criado na Task 8
+
+function emitPrint(tipo, dados) {
+  const io   = getIO()
+  const sala = tipo === 'etiqueta' ? 'entrega' : 'expedicao'
+  io?.to(sala).emit('fila:imprimir', { tipo, dados })
+  console.log(`[fila] Evento fila:imprimir tipo='${tipo}' → sala '${sala}'`)
+}
 
 const router = express.Router()
 
@@ -73,11 +80,13 @@ router.post('/scan', async (req, res) => {
     const io = getIO()
     if (result.status === 'CHAMADO') {
       io?.emit('fila:atualizada', { filaId: result.id, senha: result.senha, status: 'CHAMADO' })
-      // Imprime etiqueta QR2 automaticamente
+      // Delega impressão da etiqueta QR2 ao ft-fila-agent na máquina de entrega
       const ordem = ordens.buscarPorId(result.id)
-      printer.printEtiquetaEntrega(result.senha, ordem.qr2_code).catch(e =>
-        console.warn('[printer] Etiqueta QR2 falhou:', e.message)
-      )
+      emitPrint('etiqueta', { senha: result.senha, qr2Code: ordem.qr2_code })
+      // Notifica painel que operador ficou livre para receber próxima ordem
+      if (result.operador) {
+        io?.emit('fila:operador-livre', { operador: result.operador })
+      }
     } else if (result.status === 'ENTREGUE') {
       io?.emit('fila:entregue', { filaId: result.id, senha: result.senha })
     }
@@ -109,25 +118,63 @@ router.post('/reset-contador', (req, res) => {
   }
 })
 
+// ── GET /api/fila/fila-count — conta NOVO sem operador (na fila) ─────────────
+router.get('/fila-count', (_req, res) => {
+  try {
+    return res.json({ ok: true, total: ordens.contarNaFila() })
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ── POST /api/fila/operador/:n/proximo — atribui próxima ordem ao operador N ──
+router.post('/operador/:n/proximo', async (req, res) => {
+  const n = parseInt(req.params.n)
+  if (!n || n < 1) return res.status(400).json({ ok: false, error: 'Operador inválido' })
+
+  try {
+    // Se operador já tem ordem em separação, devolve ela (idempotente)
+    let ordem = ordens.ordemDoOperador(n)
+    if (ordem) return res.json({ ok: true, ordem })
+
+    // Pega próxima NOVO sem operador
+    const proxima = ordens.proximaOrdemNova()
+    if (!proxima) return res.json({ ok: true, ordem: null })
+
+    // Atribui operador N → status SEPARANDO
+    ordens.atribuirOperador(proxima.id, n)
+    ordem = ordens.buscarPorId(proxima.id)
+
+    // Delega impressão ao ft-fila-agent na máquina de expedição
+    emitPrint('lista', {
+      senha:   ordem.senha,
+      itens:   ordem.itens,
+      total:   ordem.total,
+      qr1Code: ordem.qr1_code,
+    })
+
+    getIO()?.emit('fila:atualizada', { filaId: ordem.id, senha: ordem.senha, status: 'SEPARANDO', operador: n })
+    return res.json({ ok: true, ordem })
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // ── POST /api/fila/:id/imprimir-lista — imprime lista + muda para SEPARANDO ──
 router.post('/:id/imprimir-lista', async (req, res) => {
   const id = parseInt(req.params.id)
   const ordem = ordens.buscarPorId(id)
   if (!ordem) return res.status(404).json({ ok: false, error: 'Ordem não encontrada' })
 
-  try {
-    await printer.printListaSeparacao({
-      senha:   ordem.senha,
-      itens:   ordem.itens,
-      total:   ordem.total,
-      qr1Code: ordem.qr1_code,
-    })
-    ordens.atualizarStatus(id, 'SEPARANDO')
-    getIO()?.emit('fila:atualizada', { filaId: id, senha: ordem.senha, status: 'SEPARANDO' })
-    return res.json({ ok: true, status: 'SEPARANDO' })
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message })
-  }
+  emitPrint('lista', {
+    senha:   ordem.senha,
+    itens:   ordem.itens,
+    total:   ordem.total,
+    qr1Code: ordem.qr1_code,
+  })
+  ordens.atualizarStatus(id, 'SEPARANDO')
+  getIO()?.emit('fila:atualizada', { filaId: id, senha: ordem.senha, status: 'SEPARANDO' })
+  return res.json({ ok: true, status: 'SEPARANDO' })
 })
 
 // ── POST /api/fila/:id/cancelar — volta para NOVO (admin) ───────────────────
@@ -141,6 +188,16 @@ router.post('/:id/cancelar', (req, res) => {
     if (err.message.includes('não encontrada')) return res.status(404).json({ ok: false, error: err.message })
     return res.status(500).json({ ok: false, error: err.message })
   }
+})
+
+// ── POST /api/fila/:id/rechamar — pisca senha na TV ─────────────────────────
+router.post('/:id/rechamar', (req, res) => {
+  const id = parseInt(req.params.id)
+  const ordem = ordens.buscarPorId(id)
+  if (!ordem) return res.status(404).json({ ok: false, error: 'Ordem não encontrada' })
+  getIO()?.emit('fila:rechamada', { filaId: id, senha: ordem.senha })
+  console.log(`[fila] Rechamada: ${ordem.senha}`)
+  return res.json({ ok: true, senha: ordem.senha })
 })
 
 module.exports = router

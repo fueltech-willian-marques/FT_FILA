@@ -25,8 +25,9 @@ module.exports = {
     porta: parseInt(cfg.servidor?.porta || '4100'),
   },
   impressora: {
-    porta:    cfg.impressora?.porta    || 'COM3',
-    baudRate: parseInt(cfg.impressora?.baudrate || '115200'),
-    colunas:  parseInt(cfg.impressora?.colunas  || '48'),
+    porta:         cfg.impressora?.porta         || 'COM3',
+    baudRate:      parseInt(cfg.impressora?.baudrate || '115200'),
+    colunas:       parseInt(cfg.impressora?.colunas  || '48'),
+    printProxyUrl: cfg.impressora?.printproxyurl || '',
   },
 }

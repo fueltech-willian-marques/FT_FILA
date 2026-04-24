@@ -16,7 +16,14 @@ setIO(io)
 
 // Middlewares
 app.use(express.json())
-app.use(express.static(path.join(__dirname, '../public')))
+// Desativa cache nos HTML para garantir atualização imediata nos painéis
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    }
+  }
+}))
 
 // Rotas
 app.use('/api/fila', require('./routes/fila'))
@@ -27,6 +34,15 @@ app.get('/', (_req, res) => res.redirect('/expedicao.html'))
 // Socket.IO — log de conexões
 io.on('connection', (socket) => {
   console.log(`[ws] Cliente conectado: ${socket.id}`)
+
+  // Painéis emitem 'join-room' com 'expedicao' ou 'entrega' ao carregar
+  socket.on('join-room', (room) => {
+    if (['expedicao', 'entrega'].includes(room)) {
+      socket.join(room)
+      console.log(`[ws] ${socket.id} entrou na sala '${room}'`)
+    }
+  })
+
   socket.on('disconnect', () => console.log(`[ws] Cliente desconectado: ${socket.id}`))
 })
 

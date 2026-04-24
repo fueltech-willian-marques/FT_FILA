@@ -79,7 +79,7 @@ function scanQR(qrCode) {
       throw new Error(`QR1 inválido: ordem ${porQR1.id} está em status ${porQR1.status}`)
     }
     atualizarStatus(porQR1.id, 'CHAMADO')
-    return { id: porQR1.id, senha: porQR1.senha, status: 'CHAMADO', acao: 'chamado_na_tv', qr2Code: porQR1.qr2_code }
+    return { id: porQR1.id, senha: porQR1.senha, status: 'CHAMADO', acao: 'chamado_na_tv', qr2Code: porQR1.qr2_code, operador: porQR1.operador }
   }
 
   // Tenta QR2 (entrega) — válido apenas no status CHAMADO
@@ -103,10 +103,41 @@ function listarTodas() {
 }
 
 /**
- * Cancela uma ordem (volta para NOVO).
+ * Cancela uma ordem (volta para NOVO, sem operador).
  */
 function cancelarOrdem(id) {
-  return atualizarStatus(id, 'NOVO')
+  db.prepare(`UPDATE ordens SET status = 'NOVO', operador = NULL, atualizado_em = ? WHERE id = ?`).run(AGORA(), id)
+  return buscarPorId(id)
+}
+
+/**
+ * Atribui uma ordem a um operador e muda status para SEPARANDO.
+ */
+function atribuirOperador(id, operador) {
+  db.prepare(`UPDATE ordens SET operador = ?, status = 'SEPARANDO', atualizado_em = ? WHERE id = ?`)
+    .run(operador, AGORA(), id)
+  return buscarPorId(id)
+}
+
+/**
+ * Retorna a próxima ordem NOVO sem operador atribuído (mais antiga primeiro).
+ */
+function proximaOrdemNova() {
+  return db.prepare(`SELECT * FROM ordens WHERE status = 'NOVO' AND operador IS NULL ORDER BY criado_em ASC LIMIT 1`).get()
+}
+
+/**
+ * Retorna a ordem SEPARANDO atribuída ao operador N (ou null).
+ */
+function ordemDoOperador(operador) {
+  return db.prepare(`SELECT * FROM ordens WHERE status = 'SEPARANDO' AND operador = ? LIMIT 1`).get(operador)
+}
+
+/**
+ * Conta ordens NOVO sem operador (na fila aguardando).
+ */
+function contarNaFila() {
+  return db.prepare(`SELECT COUNT(*) AS total FROM ordens WHERE status = 'NOVO' AND operador IS NULL`).get().total
 }
 
 /**
@@ -116,4 +147,4 @@ function resetarContador() {
   db.prepare(`DELETE FROM contador_dia WHERE data = ?`).run(HOJE())
 }
 
-module.exports = { criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus, scanQR, listarTodas, cancelarOrdem, resetarContador }
+module.exports = { criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus, scanQR, listarTodas, cancelarOrdem, resetarContador, atribuirOperador, proximaOrdemNova, ordemDoOperador, contarNaFila }

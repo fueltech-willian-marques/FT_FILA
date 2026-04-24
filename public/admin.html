@@ -4,33 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FT_FILA — Admin</title>
+<script src="https://unpkg.com/lucide@0.525.0/dist/umd/lucide.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif; padding: 24px; }
-  h1 { font-size: 20px; margin-bottom: 20px; }
+  body { background: #f5f5f5; color: #111; font-family: 'Segoe UI', Arial, sans-serif; padding: 0; }
+  header { background: #e52e2e; padding: 14px 24px; display: flex; align-items: center; gap: 12px; color: #fff; margin-bottom: 24px; }
+  header .logo { height: 34px; width: auto; object-fit: contain; filter: brightness(0) invert(1); }
+  header .divider { width: 1px; height: 28px; background: rgba(255,255,255,0.3); }
+  header h1 { font-size: 20px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+  main { padding: 0 24px 24px; }
+  h1 { font-size: 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
   .actions { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
-  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+         cursor: pointer; display: flex; align-items: center; gap: 6px; }
   .btn-danger  { background: #dc2626; color: #fff; }
-  .btn-default { background: #2a2d3e; color: #ccc; }
+  .btn-default { background: #e0e0e0; color: #444; }
   .btn:hover { opacity: 0.8; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { text-align: left; color: #666; padding: 8px 10px; border-bottom: 1px solid #2a2d3e; }
-  td { padding: 8px 10px; border-bottom: 1px solid #1e2132; vertical-align: top; }
-  tr:hover td { background: #1a1d27; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff;
+          border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  th { text-align: left; color: #888; padding: 10px 12px; border-bottom: 1px solid #e0e0e0;
+       background: #fafafa; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
   .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-  .NOVO      { background: #1b3a5c; color: #60a5fa; }
-  .SEPARANDO { background: #3d1f00; color: #f59e0b; }
-  .CHAMADO   { background: #001a0d; color: #10b981; }
-  .ENTREGUE  { background: #1f2937; color: #6b7280; }
-  .msg { color: #10b981; font-size: 13px; margin-bottom: 12px; display: none; }
+  .NOVO      { background: #dbeafe; color: #1d4ed8; }
+  .SEPARANDO { background: #fef3c7; color: #92400e; }
+  .CHAMADO   { background: #d1fae5; color: #065f46; }
+  .ENTREGUE  { background: #f3f4f6; color: #6b7280; }
+  .msg { color: #10b981; font-size: 13px; margin-bottom: 12px; display: none;
+         background: #d1fae5; padding: 8px 14px; border-radius: 8px; }
+  .lucide { display: inline-block; vertical-align: middle; }
 </style>
 </head>
 <body>
-<h1>⚙️ FT_FILA — Admin</h1>
+<header>
+  <img src="/logo_fueltech.png" alt="FuelTech" class="logo" onerror="this.style.display='none'" />
+  <div class="divider"></div>
+  <h1><i data-lucide="settings" style="width:22px;height:22px"></i> FILA — Admin</h1>
+</header>
 
+<main>
 <div class="actions">
-  <button class="btn btn-danger" onclick="resetContador()">🔄 Resetar contador do dia</button>
-  <button class="btn btn-default" onclick="carregar()">↺ Atualizar</button>
+  <button class="btn btn-danger" onclick="resetContador()">
+    <i data-lucide="rotate-ccw" style="width:15px;height:15px"></i> Resetar contador do dia
+  </button>
+  <button class="btn btn-default" onclick="carregar()">
+    <i data-lucide="refresh-cw" style="width:15px;height:15px"></i> Atualizar
+  </button>
 </div>
 
 <div class="msg" id="msg"></div>
@@ -43,6 +64,8 @@
 </table>
 
 <script>
+  lucide.createIcons()
+
   function showMsg(m) { const el = document.getElementById('msg'); el.textContent = m; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500) }
 
   async function carregar() {
@@ -72,5 +95,6 @@
 
   carregar()
 </script>
+</main>
 </body>
 </html>
