@@ -3,10 +3,11 @@ const ordens   = require('../db/ordens')
 const { getIO } = require('../socket')
 
 function emitPrint(tipo, dados) {
-  const io   = getIO()
-  const sala = tipo === 'etiqueta' ? 'entrega' : 'expedicao'
-  io?.to(sala).emit('fila:imprimir', { tipo, dados })
-  console.log(`[fila] Evento fila:imprimir tipo='${tipo}' → sala '${sala}'`)
+  const io = getIO()
+  // Lista de separação e etiqueta de entrega: ambas vão para expedicao
+  // (o expedicao.html está nessa sala e tem o fila-agent local disponível)
+  io?.to('expedicao').emit('fila:imprimir', { tipo, dados })
+  console.log(`[fila] Evento fila:imprimir tipo='${tipo}' → sala 'expedicao'`)
 }
 
 const router = express.Router()

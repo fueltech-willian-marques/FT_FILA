@@ -64,6 +64,15 @@
                   padding: 3px 8px; border-radius: 12px; margin-top: 8px;
                   font-weight: 600; }
 
+  /* ── Reprint button ─────────────────────────────────────────────────────── */
+  .btn-reimprimir { display: flex; align-items: center; gap: 5px; margin-top: 8px;
+                    width: 100%; padding: 6px 10px; border-radius: 7px; font-size: 11px;
+                    font-weight: 700; cursor: pointer; transition: all 0.15s;
+                    border: 1.5px solid #d97706; background: #fff; color: #d97706; }
+  .btn-reimprimir:hover:not(:disabled) { background: #fef3c7; }
+  .btn-reimprimir:disabled { border-color: #d1d5db; color: #9ca3af;
+                              background: #f9fafb; cursor: not-allowed; }
+
   /* ── Awaiting placeholder ───────────────────────────────────────────────── */
   .aguardando { display: flex; flex-direction: column; align-items: center;
                 justify-content: center; padding: 32px 12px; color: #9ca3af;
@@ -178,6 +187,7 @@
   let numOperadores = 0
   let ordensAtivas  = []
   let naFila        = 0
+  const reprintUsed = new Set()
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   function init() {
@@ -301,6 +311,12 @@
           <i data-lucide="clock" style="width:10px;height:10px"></i>
           Aguardando scan QR1
         </div>
+        <button class="btn-reimprimir" id="reprint-${o.id}"
+                onclick="reimprimir(${o.id})"
+                ${reprintUsed.has(o.id) ? 'disabled' : ''}>
+          <i data-lucide="printer" style="width:11px;height:11px"></i>
+          ${reprintUsed.has(o.id) ? 'Reimpresso' : 'Reimprimir lista'}
+        </button>
       </div>`
   }
 
@@ -311,6 +327,34 @@
         <div class="msg">Aguardando próxima venda</div>
         <div class="sub">A impressão ocorre automaticamente</div>
       </div>`
+  }
+
+  // ── Reimpressão manual (1x por ordem) ────────────────────────────────────
+  async function reimprimir(ordemId) {
+    const btn = document.getElementById(`reprint-${ordemId}`)
+    if (!btn || btn.disabled) return
+    btn.disabled = true
+    btn.innerHTML = '<i data-lucide="loader-2" style="width:11px;height:11px"></i> Imprimindo...'
+    lucide.createIcons()
+    try {
+      const res = await fetch(`/api/fila/${ordemId}/imprimir-lista`, { method: 'POST' })
+      if (res.ok) {
+        reprintUsed.add(ordemId)
+        btn.innerHTML = '<i data-lucide="check" style="width:11px;height:11px"></i> Reimpresso'
+        showToast('Lista enviada para impressão')
+      } else {
+        btn.disabled = false
+        btn.innerHTML = '<i data-lucide="printer" style="width:11px;height:11px"></i> Reimprimir lista'
+        lucide.createIcons()
+        showToast('Falha ao reimprimir — tente novamente', true)
+      }
+    } catch (e) {
+      btn.disabled = false
+      btn.innerHTML = '<i data-lucide="printer" style="width:11px;height:11px"></i> Reimprimir lista'
+      lucide.createIcons()
+      showToast('Erro de conexão com servidor', true)
+    }
+    lucide.createIcons()
   }
 
   // ── Scanner USB HID ───────────────────────────────────────────────────────
@@ -344,6 +388,12 @@
 
         if (res.ok && data.status === 'CHAMADO') {
           showToast(`Senha ${data.senha} chamada no painel TV`)
+          // Imprime etiqueta de entrega direto no agent local (qr2Code vem na resposta do scan)
+          fetch('http://localhost:4002/print/etiqueta', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ senha: data.senha, qr2Code: data.qr2Code }),
+          }).catch(e => console.warn('[etiqueta] fila-agent offline:', e.message))
         } else if (res.ok && data.status === 'ENTREGUE') {
           showToast(`Senha ${data.senha} entregue`)
         } else {
