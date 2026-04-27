@@ -147,4 +147,9 @@ function resetarContador() {
   db.prepare(`DELETE FROM contador_dia WHERE data = ?`).run(HOJE())
 }
 
-module.exports = { criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus, scanQR, listarTodas, cancelarOrdem, resetarContador, atribuirOperador, proximaOrdemNova, ordemDoOperador, contarNaFila }
+function limparTudo() {
+  db.prepare(`DELETE FROM ordens`).run()
+  db.prepare(`DELETE FROM contador_dia`).run()
+}
+
+module.exports = { criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus, scanQR, listarTodas, cancelarOrdem, resetarContador, atribuirOperador, proximaOrdemNova, ordemDoOperador, contarNaFila, limparTudo }

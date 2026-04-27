@@ -118,6 +118,17 @@ router.post('/reset-contador', (req, res) => {
   }
 })
 
+// ── POST /api/fila/limpar-tudo — apaga todas as ordens e zera contador (admin) ─
+router.post('/limpar-tudo', (req, res) => {
+  try {
+    ordens.limparTudo()
+    getIO()?.emit('fila:atualizada', { reset: true })
+    return res.json({ ok: true, msg: 'Todas as ordens removidas e contador zerado' })
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // ── GET /api/fila/fila-count — conta NOVO sem operador (na fila) ─────────────
 router.get('/fila-count', (_req, res) => {
   try {
