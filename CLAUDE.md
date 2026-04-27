@@ -17,7 +17,7 @@ Quando o cliente finaliza uma compra no totem (FT_PDV), o sistema gera automatic
 ## Stack
 
 - **Backend:** Node.js Express + Socket.IO (porta 4100)
-- **Banco:** SQLite via `better-sqlite3` (arquivo `data/fila.db`)
+- **Banco:** PostgreSQL 16 — mesmo servidor do FT_PDV (`ftpdv` database, `postgresql://ftpdv:ftpdv@localhost:5432/ftpdv`)
 - **Frontend:** HTML/JS/CSS puro (arquivos estáticos em `public/`)
 - **Agent:** Node.js Express (porta 4002) — instalado em cada máquina com impressora
 
@@ -103,6 +103,12 @@ FT_FILA/
 ---
 
 ## Banco de dados (SQLite)
+
+### Banco de dados
+
+PostgreSQL 16 — banco `ftpdv` (mesmo do FT_PDV). URL em `config/fila.ini [Postgres] Url`.
+Tabelas: `ordens` e `contador_dia` (criadas automaticamente no startup via `db.init()`).
+QR codes armazenados **sem hífen** (UUID hex puro, 32 chars) para compatibilidade com scanners HID em teclado ABNT2.
 
 ### Tabela `ordens`
 
@@ -229,14 +235,16 @@ Quando vazio, o ft-fila-agent usa a porta COM configurada em `agent/config/print
 
 ### Modelos de impressora suportados
 
-| Modelo | Corte | BaudRate padrão | Conexão |
-|--------|-------|-----------------|---------|
-| `Bematech_MP4200TH` | `ESC m` (proprietário) — 10 linhas de avanço | 115200 | Serial / USB-CDC |
-| `ElginI9` | `GS V 0` (padrão ESC/POS) — 5 linhas de avanço | 9600 | USB-CDC (COM) ou USB driver (USB001) |
+| Modelo (`printer.ini`) | Impressora física | Corte | BaudRate | Porta |
+|------------------------|-------------------|-------|----------|-------|
+| `Bematech_MP4200TH` | MP-4200 **HS** (RS-232) | `ESC m` proprietário — 10 linhas | 115200 | `COM3` (cabo DB9) |
+| `Bematech_MP4200TH` | MP-4200 **TH** (USB-CDC) | `ESC m` proprietário — 10 linhas | 115200 | `COM9` (porta virtual — Gerenciador de Dispositivos) |
+| `ElginI9` | Elgin I9 (USB driver) | `GS V 0` ESC/POS — 5 linhas | 9600 | `USB001` (driver Windows — agent usa `rawprint.ps1`) |
+| `ElginI9` | Elgin I9 (USB-CDC) | `GS V 0` ESC/POS — 5 linhas | 115200 | `COM5` (porta virtual — Gerenciador de Dispositivos) |
 
 **Tipos de porta suportados em `printer.ini`:**
 - `Porta=COM5` — porta serial ou USB-CDC (driver cria COM virtual). Usa `serialport`.
-- `Porta=USB001` — porta de impressora Windows instalada via driver. Usa `fs.createWriteStream('\\\\.\\USB001')` — escreve ESC/POS direto, sem spooler.
+- `Porta=USB001` — porta de impressora Windows instalada via driver. Agent usa `rawprint.ps1` (WritePrinter API via winspool.drv) — envia ESC/POS diretamente ao spooler RAW.
 
 Para saber qual porta: **Gerenciador de Dispositivos → Portas (COM e LPT)** (USB-CDC) ou **Impressoras e Scanners → propriedades → porta** (USB001/LPT).
 
