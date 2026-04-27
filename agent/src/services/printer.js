@@ -7,6 +7,8 @@
 const { SerialPort }  = require('serialport')
 const fs              = require('fs')
 const path            = require('path')
+const os              = require('os')
+const { execSync }    = require('child_process')
 const { bufQRRaster } = require('./qrcode')
 
 // ── Lê config/printer.ini ─────────────────────────────────────────────────────
@@ -56,7 +58,8 @@ const FEED_CUT = cfg.modelo === 'ElginI9'
 function txt(s)         { return Buffer.from(s + '\n', 'latin1') }
 function line(ch = '-') { return txt(ch.repeat(COLS)) }
 
-// Porta Windows (USB001, LPT1): escreve direto no device file sem serialport
+// Porta Windows (USB001, LPT1): spooler não expõe device file direto.
+// Grava bytes em arquivo temporário e envia via "copy /b" para a porta.
 function isWindowsPort(porta) {
   return /^USB\d+$/i.test(porta) || /^LPT\d+$/i.test(porta)
 }
@@ -64,11 +67,16 @@ function isWindowsPort(porta) {
 function writeToPort(data) {
   if (isWindowsPort(cfg.porta)) {
     return new Promise((resolve, reject) => {
-      const stream = fs.createWriteStream(`\\\\.\\${cfg.porta}`)
-      stream.on('error', reject)
-      stream.on('finish', resolve)
-      stream.write(data)
-      stream.end()
+      const tmp = path.join(os.tmpdir(), `ftfila-${Date.now()}.bin`)
+      try {
+        fs.writeFileSync(tmp, data)
+        execSync(`copy /b "${tmp}" ${cfg.porta}`, { stdio: 'pipe' })
+        resolve()
+      } catch (err) {
+        reject(new Error(`Impressao via ${cfg.porta} falhou: ${err.message}`))
+      } finally {
+        try { fs.unlinkSync(tmp) } catch (_) {}
+      }
     })
   }
   return new Promise((resolve, reject) => {
