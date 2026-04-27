@@ -166,11 +166,12 @@
   // Identifica este painel como sala 'expedicao'
   socket.emit('join-room', 'expedicao')
 
-  // Recebe solicitações de impressão do FT_FILA (Linux) e delega ao agente local
+  // Recebe solicitações de impressão do FT_FILA e delega ao agente local
+  // Apenas 'lista': a etiqueta de entrega é impressa diretamente no handler do scan (evita dupla impressão)
   socket.on('fila:imprimir', async ({ tipo, dados }) => {
+    if (tipo !== 'lista') return
     try {
-      const endpoint = tipo === 'lista' ? '/print/lista' : '/print/etiqueta'
-      const resp = await fetch(`http://localhost:4002${endpoint}`, {
+      const resp = await fetch('http://localhost:4002/print/lista', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(dados),
