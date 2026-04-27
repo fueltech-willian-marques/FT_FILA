@@ -192,19 +192,25 @@ if (-not $chromePath) {
     else        { $chromePath = $chrome; Log "  Aviso: Chrome nao encontrado - instale e os atalhos funcionarao" }
 }
 
-$desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
-$wsh     = New-Object -ComObject WScript.Shell
+# Desktop do usuario atual (quem rodou o script) E desktop publico
+$desktops = @(
+    [Environment]::GetFolderPath("Desktop"),
+    [Environment]::GetFolderPath("CommonDesktopDirectory")
+) | Select-Object -Unique
+$wsh = New-Object -ComObject WScript.Shell
 
 $atalhos = @(
     @{ Nome = "FT FILA - TV";        URL = "$SERVIDOR_URL/tv.html"         },
     @{ Nome = "FT FILA - Separacao"; URL = "$SERVIDOR_URL/expedicao.html"  },
     @{ Nome = "FT FILA - Entrega";   URL = "$SERVIDOR_URL/entrega.html"    }
 )
-foreach ($a in $atalhos) {
-    $link = $wsh.CreateShortcut("$desktop\$($a.Nome).lnk")
-    $link.TargetPath = $chromePath
-    $link.Arguments  = "--new-window --start-maximized `"$($a.URL)`""
-    $link.Save()
+foreach ($d in $desktops) {
+    foreach ($a in $atalhos) {
+        $link = $wsh.CreateShortcut("$d\$($a.Nome).lnk")
+        $link.TargetPath = $chromePath
+        $link.Arguments  = "--new-window --start-maximized `"$($a.URL)`""
+        $link.Save()
+    }
 }
 Ok "Atalhos criados: FT FILA - TV, Separacao, Entrega"
 
@@ -232,10 +238,19 @@ Log "======================================================"
 Log ""
 Start-Process notepad.exe $printerIni
 Log "Aguardando fechar o Notepad para reiniciar o agent..."
-Wait-Process notepad -ErrorAction SilentlyContinue
+Wait-Process -Name notepad -ErrorAction SilentlyContinue
 
-Restart-Service $AGENT_SVC -ErrorAction SilentlyContinue
-Ok "Agent reiniciado com nova configuracao"
+Log "Reiniciando $AGENT_SVC..."
+try {
+    Stop-Service  $AGENT_SVC -Force -ErrorAction Stop
+    Start-Sleep -Seconds 2
+    Start-Service $AGENT_SVC -ErrorAction Stop
+    Ok "Agent reiniciado com nova configuracao"
+} catch {
+    Log "  Aviso: $_ - tentando iniciar diretamente..."
+    Start-Process $nodeExe -ArgumentList $agentEntry -WorkingDirectory $AGENT_DEST -WindowStyle Hidden
+    Ok "Agent iniciado como processo (servico sera ativo no proximo boot)"
+}
 
 # -- Resumo -------------------------------------------------------------------
 Log ""
