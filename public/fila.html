@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuelTech — Sua Fila</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #fff;
+         font-family: 'Segoe UI', Arial, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { background: #e52e2e; padding: 14px 20px;
+           display: flex; align-items: center; gap: 12px; }
+  .header-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+  .header-senha { margin-left: auto; font-size: 22px; font-weight: 900;
+                  background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 8px; }
+
+  .lista { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  .card { border-radius: 12px; padding: 14px 18px;
+          display: flex; flex-direction: column; gap: 4px; }
+  .card.separando { background: #1a1400; border: 2px solid #f59e0b; }
+  .card.chamado   { background: #001a0d; border: 2px solid #10b981; }
+  .card.meu       { background: #2a1000; border: 2px solid #f97316;
+                    box-shadow: 0 0 20px rgba(249,115,22,0.3); }
+
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: 1px;
+           text-transform: uppercase; margin-bottom: 2px; }
+  .card.separando .badge { color: #f59e0b; }
+  .card.chamado   .badge { color: #10b981; }
+  .card.meu       .badge { color: #f97316; }
+
+  .senha-text { font-size: 40px; font-weight: 900; letter-spacing: 3px; }
+  .card.separando .senha-text { color: #fde68a; }
+  .card.chamado   .senha-text { color: #6ee7b7; }
+  .card.meu       .senha-text { color: #fdba74; }
+
+  .vazio { text-align: center; color: #666; font-size: 16px; padding: 40px 20px; }
+
+  .screen-pronto { display: none; flex-direction: column; align-items: center;
+                   justify-content: center; flex: 1; padding: 32px 20px; text-align: center; }
+  .screen-pronto.visible { display: flex; }
+  .pronto-icon   { font-size: 80px; margin-bottom: 16px; }
+  .pronto-titulo { font-size: 28px; font-weight: 900; color: #10b981; margin-bottom: 8px; }
+  .pronto-senha  { font-size: 52px; font-weight: 900; color: #f97316;
+                   margin: 12px 0; letter-spacing: 3px; }
+  .pronto-sub    { font-size: 16px; color: #aaa; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-title">FUELTECH — FILA</div>
+  <div class="header-senha" id="header-senha">—</div>
+</header>
+
+<div class="lista" id="lista"></div>
+
+<div class="screen-pronto" id="screen-pronto">
+  <div class="pronto-icon">✅</div>
+  <div class="pronto-titulo">Seu pedido está pronto!</div>
+  <div class="pronto-senha" id="pronto-senha"></div>
+  <div class="pronto-sub">Dirija-se ao balcão para retirar seu pedido.</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const params = new URLSearchParams(location.search)
+  const minha  = (params.get('senha') || '').toUpperCase()
+  let   pronto = false
+
+  document.getElementById('header-senha').textContent = minha || '—'
+  document.getElementById('pronto-senha').textContent  = minha
+
+  const socket = io()
+
+  function render(ordens) {
+    if (pronto) return
+    const lista = document.getElementById('lista')
+    lista.innerHTML = ''
+    const visiveis = ordens.filter(o => o.status === 'SEPARANDO' || o.status === 'CHAMADO')
+    if (!visiveis.length) {
+      lista.innerHTML = '<div class="vazio">Nenhum pedido em andamento</div>'
+      return
+    }
+    visiveis.forEach(o => {
+      const isMeu = minha && o.senha.toUpperCase() === minha
+      const tipo  = o.status.toLowerCase()
+      const div   = document.createElement('div')
+      div.className = `card ${tipo}${isMeu ? ' meu' : ''}`
+      const badgeText = isMeu ? 'SEU PEDIDO'
+                      : (tipo === 'separando' ? 'Em Separação' : 'Chamado')
+      div.innerHTML = `<div class="badge">${badgeText}</div>
+                       <div class="senha-text">${o.senha}</div>`
+      lista.appendChild(div)
+    })
+  }
+
+  function mostrarPronto() {
+    if (pronto) return
+    pronto = true
+    document.getElementById('lista').style.display = 'none'
+    document.getElementById('screen-pronto').classList.add('visible')
+  }
+
+  function atualizar() {
+    fetch('/api/fila/tv')
+      .then(r => r.json())
+      .then(render)
+      .catch(() => {})
+  }
+
+  atualizar()
+
+  socket.on('fila:nova',       atualizar)
+  socket.on('fila:atualizada', atualizar)
+  socket.on('fila:rechamada',  atualizar)
+
+  socket.on('fila:entregue', ({ senha }) => {
+    if (minha && senha && senha.toUpperCase() === minha) {
+      mostrarPronto()
+    } else {
+      atualizar()
+    }
+  })
+</script>
+</body>
+</html>
