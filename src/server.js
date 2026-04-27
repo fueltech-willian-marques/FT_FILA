@@ -5,8 +5,7 @@ const { Server } = require('socket.io')
 const settings   = require('./config/settings')
 const { setIO }  = require('./socket')
 
-// Inicializa banco (cria tabelas se não existir)
-require('./db/database')
+const db = require('./db/database')
 
 const app    = express()
 const server = http.createServer(app)
@@ -47,11 +46,19 @@ io.on('connection', (socket) => {
 })
 
 const PORT = settings.servidor.porta
-server.listen(PORT, () => {
-  console.log(`[FT_FILA] Rodando em http://localhost:${PORT}`)
-  console.log(`[FT_FILA] Painéis:`)
-  console.log(`  Expedição : http://localhost:${PORT}/expedicao.html`)
-  console.log(`  TV Senhas : http://localhost:${PORT}/tv.html`)
-  console.log(`  Entrega   : http://localhost:${PORT}/entrega.html`)
-  console.log(`  Admin     : http://localhost:${PORT}/admin.html`)
-})
+
+db.init()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`[FT_FILA] Rodando em http://localhost:${PORT}`)
+      console.log(`[FT_FILA] Painéis:`)
+      console.log(`  Expedição : http://localhost:${PORT}/expedicao.html`)
+      console.log(`  TV Senhas : http://localhost:${PORT}/tv.html`)
+      console.log(`  Entrega   : http://localhost:${PORT}/entrega.html`)
+      console.log(`  Admin     : http://localhost:${PORT}/admin.html`)
+    })
+  })
+  .catch(err => {
+    console.error('[FT_FILA] Falha ao conectar ao PostgreSQL:', err.message)
+    process.exit(1)
+  })

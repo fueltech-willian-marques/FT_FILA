@@ -24,6 +24,9 @@ module.exports = {
   servidor: {
     porta: parseInt(cfg.servidor?.porta || '4100'),
   },
+  postgres: {
+    url: process.env.POSTGRES_URL || cfg.postgres?.url || 'postgresql://ftpdv:ftpdv@localhost:5432/ftpdv',
+  },
   impressora: {
     porta:         cfg.impressora?.porta         || 'COM3',
     baudRate:      parseInt(cfg.impressora?.baudrate || '115200'),

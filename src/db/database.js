@@ -1,41 +1,32 @@
-const Database = require('better-sqlite3')
-const path     = require('path')
-const fs       = require('fs')
+const { Pool }  = require('pg')
+const settings  = require('../config/settings')
 
-const dataDir = path.resolve(__dirname, '../../data')
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
+const pool = new Pool({ connectionString: settings.postgres.url })
 
-const db = new Database(path.join(dataDir, 'fila.db'))
-
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS ordens (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    senha         TEXT NOT NULL,
-    status        TEXT NOT NULL DEFAULT 'NOVO',
-    qr1_code      TEXT UNIQUE NOT NULL,
-    qr2_code      TEXT UNIQUE NOT NULL,
-    itens         TEXT NOT NULL,
-    chave_nfce    TEXT,
-    total         REAL,
-    origem        TEXT DEFAULT 'totem',
-    criado_em     TEXT NOT NULL,
-    atualizado_em TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS contador_dia (
-    data     TEXT PRIMARY KEY,
-    proximo  INTEGER DEFAULT 1
-  );
-`)
-
-// Migration: adiciona coluna operador se ainda não existir
-const colunas = db.prepare(`PRAGMA table_info(ordens)`).all()
-if (!colunas.find(c => c.name === 'operador')) {
-  db.exec(`ALTER TABLE ordens ADD COLUMN operador INTEGER DEFAULT NULL`)
-  console.log('[db] Migration: coluna operador adicionada')
+async function init() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ordens (
+      id            SERIAL PRIMARY KEY,
+      senha         TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'NOVO',
+      qr1_code      TEXT UNIQUE NOT NULL,
+      qr2_code      TEXT UNIQUE NOT NULL,
+      itens         TEXT NOT NULL,
+      chave_nfce    TEXT,
+      total         NUMERIC(10,2) DEFAULT 0,
+      origem        TEXT DEFAULT 'totem',
+      operador      INTEGER,
+      criado_em     TIMESTAMPTZ NOT NULL,
+      atualizado_em TIMESTAMPTZ NOT NULL
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contador_dia (
+      data    TEXT PRIMARY KEY,
+      proximo INTEGER NOT NULL DEFAULT 1
+    )
+  `)
+  console.log('[db] PostgreSQL conectado — tabelas ordens e contador_dia verificadas')
 }
 
-module.exports = db
+module.exports = { pool, init }

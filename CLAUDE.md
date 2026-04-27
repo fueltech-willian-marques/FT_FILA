@@ -37,25 +37,18 @@ Quando o cliente finaliza uma compra no totem (FT_PDV), o sistema gera automatic
 │  └─────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────┐
-│  Máquina de Expedição               │
-│  ┌───────────────────────────────┐  │
-│  │  ft-fila-agent (porta 4002)   │  │
-│  │  - Recebe eventos WebSocket   │  │
-│  │  - Imprime ESC/POS na local   │  │
-│  └───────────────────────────────┘  │
-│  Chrome → http://10.100.62.21:4100  │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  Máquina de Expedição  (sala Socket.IO: 'expedicao')     │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  ft-fila-agent (porta 4002)                       │  │
+│  │  - Imprime lista de separação (QR1)               │  │
+│  │  - Imprime etiqueta de entrega (QR2)              │  │
+│  └───────────────────────────────────────────────────┘  │
+│  Chrome → expedicao.html  (join-room 'expedicao')        │
+└─────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────┐
-│  Máquina de Entrega                 │
-│  ┌───────────────────────────────┐  │
-│  │  ft-fila-agent (porta 4002)   │  │
-│  │  - Recebe eventos WebSocket   │  │
-│  │  - Imprime etiqueta QR2       │  │
-│  └───────────────────────────────┘  │
-│  Chrome → http://10.100.62.21:4100  │
-└─────────────────────────────────────┘
+Nota: entrega.html lê QR2 para marcar ENTREGUE mas NÃO imprime.
+Toda impressão (lista + etiqueta) é feita pela sala 'expedicao'.
 ```
 
 ---
@@ -158,7 +151,7 @@ Operador termina separação → scan do QR1 impresso
   └─ POST /api/fila/scan { qrCode: '<uuid do QR1>' }
      └─ muda status → CHAMADO
      └─ emite: fila:atualizada { status:'CHAMADO' }
-     └─ emite: fila:imprimir → sala 'entrega' (ft-fila-agent imprime etiqueta + QR2)
+     └─ emite: fila:imprimir → sala 'expedicao' (ft-fila-agent imprime etiqueta + QR2)
      └─ emite: fila:operador-livre { operador:N }
 
 Painel TV (tv.html) exibe senha em destaque
@@ -200,6 +193,11 @@ Retorna: `{ ok, filaId, senha, qr2Code }`
 ### POST `/api/fila/:id/cancelar` — volta ordem para NOVO
 ### POST `/api/fila/:id/rechamar` — pisca senha na TV
 ### POST `/api/fila/reset-contador` — reseta numeração do dia
+### POST `/api/fila/limpar-tudo` — remove todas as ordens e zera contador (reset completo)
+### GET `/api/fila/view/:token` — status da ordem pelo token qr2Code (somente leitura, para cliente)
+```json
+{ "ok": true, "senha": "A-042", "status": "CHAMADO", "criadoEm": "..." }
+```
 
 ---
 
@@ -215,10 +213,10 @@ Retorna: `{ ok, filaId, senha, qr2Code }`
 | `fila:imprimir` | delega impressão ao agent | `{ tipo:'lista'|'etiqueta', dados }` |
 
 ### Salas Socket.IO
-- `expedicao` — painéis de expedição (recebem `fila:imprimir tipo=lista`)
-- `entrega` — painéis de entrega (recebem `fila:imprimir tipo=etiqueta`)
+- `expedicao` — recebe TODOS os eventos `fila:imprimir` (tanto `tipo='lista'` quanto `tipo='etiqueta'`)
+  - `expedicao.html` filtra: Socket.IO só processa `tipo='lista'`; etiqueta é impressa via fetch direto após scan QR1
 
-O navegador emite `join-room 'expedicao'` ou `join-room 'entrega'` ao carregar.
+O navegador de expedição emite `join-room 'expedicao'` ao carregar.
 
 ---
 
@@ -304,6 +302,11 @@ PrintProxyUrl=http://localhost:4000   ; vazio = impressora própria
 - [x] `instalar-fila-agent.ps1` — instalador automático do agent (Node.js + NSSM + printer.ini)
 - [x] `atualizar-fila-agent.ps1` — atualizador do agent preservando printer.ini e logs
 - [x] Suporte a múltiplos modelos de impressora: `Bematech_MP4200TH` e `ElginI9` (campo `Modelo` no `printer.ini`)
+- [x] **Correção impressão etiqueta de entrega** (2026-04-27):
+  - `emitPrint` envia todos os eventos para sala `'expedicao'` (era `'entrega'` — nenhum browser na sala)
+  - `expedicao.html` Socket.IO filtra apenas `tipo='lista'`; etiqueta é impressa via `fetch localhost:4002/print/etiqueta` diretamente no handler de scan QR1
+- [x] **`POST /api/fila/limpar-tudo`** — apaga todas as ordens e zera o contador (reset completo para testes)
+- [x] **`GET /api/fila/view/:token`** — endpoint público que resolve o token `qr2Code` (UUID) para status da senha (usado pelo QR de acompanhamento no cupom fiscal)
 
 ## Scripts de deploy
 
@@ -318,9 +321,13 @@ PrintProxyUrl=http://localhost:4000   ; vazio = impressora própria
 
 ## O que ainda falta / próximos passos
 
-- [ ] Instalar ft-fila-agent nas máquinas de expedição e entrega
-  - Executar `instalar-fila-agent.ps1` como Administrador em cada PC
-  - Configurar `printer.ini` com a porta COM correta
-- [ ] Testar fluxo completo com QR scan via câmera ou leitor de código
+- [ ] **Reiniciar serviço FT_FILA no servidor** após atualização de `src/routes/fila.js` (necessário via RDP — SSH exit 255):
+  ```
+  Restart-Service FT_FILA
+  ```
+- [ ] Instalar ft-fila-agent na máquina de expedição
+  - Executar `instalar-fila-agent.ps1` como Administrador
+  - Configurar `printer.ini` com a porta COM correta (USB001 para Elgin I9 via driver)
+- [ ] Testar fluxo completo com QR scan via câmera ou leitor de código de barras
 - [ ] Configurar rechamada automática após X minutos sem entrega
 - [ ] Relatórios de ordens por dia/período (painel admin)

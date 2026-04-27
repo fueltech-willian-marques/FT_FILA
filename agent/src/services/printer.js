@@ -58,11 +58,13 @@ const FEED_CUT = cfg.modelo === 'ElginI9'
 function txt(s)         { return Buffer.from(s + '\n', 'latin1') }
 function line(ch = '-') { return txt(ch.repeat(COLS)) }
 
-// Porta Windows (USB001, LPT1): spooler não expõe device file direto.
-// Grava bytes em arquivo temporário e envia via "copy /b" para a porta.
+// Porta Windows (USB001, LPT1): usa WritePrinter API via PowerShell (rawprint.ps1).
+// CMD "copy /b" não reconhece USB001 como dispositivo — cria arquivo local em vez disso.
 function isWindowsPort(porta) {
   return /^USB\d+$/i.test(porta) || /^LPT\d+$/i.test(porta)
 }
+
+const RAW_PRINT_SCRIPT = path.join(__dirname, '../rawprint.ps1')
 
 function writeToPort(data) {
   if (isWindowsPort(cfg.porta)) {
@@ -70,10 +72,15 @@ function writeToPort(data) {
       const tmp = path.join(os.tmpdir(), `ftfila-${Date.now()}.bin`)
       try {
         fs.writeFileSync(tmp, data)
-        execSync(`copy /b "${tmp}" ${cfg.porta}`, { stdio: 'pipe' })
+        const out = execSync(
+          `powershell -NonInteractive -NoProfile -ExecutionPolicy Bypass -File "${RAW_PRINT_SCRIPT}" "${cfg.porta}" "${tmp}"`,
+          { stdio: 'pipe', encoding: 'utf8' }
+        )
+        console.log(`[printer] ${out.trim()}`)
         resolve()
       } catch (err) {
-        reject(new Error(`Impressao via ${cfg.porta} falhou: ${err.message}`))
+        const msg = (err.stderr || err.stdout || err.message || '').toString().trim()
+        reject(new Error(`Impressao via ${cfg.porta} falhou: ${msg}`))
       } finally {
         try { fs.unlinkSync(tmp) } catch (_) {}
       }
@@ -117,7 +124,7 @@ async function printListaSeparacao({ senha, itens, total, qr1Code }) {
   const itensBufs = itensArr.flatMap(it => {
     const cod   = String(it.B1_COD  || it.codigo    || '').trim()
     const desc  = String(it.B1_DESC || it.descricao || '').substring(0, COLS - 2)
-    const end_  = String(it.B1_ENDEREC || '').trim()
+    const end_  = String(it.B1_ENDEREC || it.B1_ENDERE2 || '').trim()
     const qty   = it.quantidade || it.qty || 1
     const valor = ((it.vrUnit || it.PRECO || 0) * qty).toFixed(2)
     const lines = [BOLD_ON, txt(`  ${qty}x ${desc}`), BOLD_OFF]
