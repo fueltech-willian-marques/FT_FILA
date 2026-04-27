@@ -1,155 +1,172 @@
 const { v4: uuidv4 } = require('uuid')
-const db = require('./database')
+const { pool }       = require('./database')
 
-const HOJE = () => new Date().toISOString().slice(0, 10)
+const HOJE  = () => new Date().toISOString().slice(0, 10)
 const AGORA = () => new Date().toISOString()
 
-/**
- * Gera próximo número de senha do dia de forma atômica.
- * Retorna string no formato "A-042".
- */
-function proximaSenha() {
-  const hoje = HOJE()
-  const tx = db.transaction(() => {
-    db.prepare(`INSERT OR IGNORE INTO contador_dia (data, proximo) VALUES (?, 1)`).run(hoje)
-    const row = db.prepare(`SELECT proximo FROM contador_dia WHERE data = ?`).get(hoje)
-    db.prepare(`UPDATE contador_dia SET proximo = proximo + 1 WHERE data = ?`).run(hoje)
-    return row.proximo
-  })
-  const num = tx()
-  return `A-${String(num).padStart(3, '0')}`
-}
+// QR codes sem hífen — evita problema de layout de teclado no scanner HID
+const qrId = () => uuidv4().replace(/-/g, '')
 
 /**
- * Cria uma nova ordem e retorna { id, senha, qr1Code, qr2Code, status }.
+ * Gera próximo número de senha do dia de forma atômica (transação PG).
  */
-function criarOrdem({ itens, total, chaveNfce, origem }) {
-  const senha   = proximaSenha()
-  const qr1Code = uuidv4()
-  const qr2Code = uuidv4()
+async function proximaSenha() {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `INSERT INTO contador_dia (data, proximo) VALUES ($1, 1) ON CONFLICT (data) DO NOTHING`,
+      [HOJE()]
+    )
+    const { rows: [row] } = await client.query(
+      `SELECT proximo FROM contador_dia WHERE data = $1 FOR UPDATE`,
+      [HOJE()]
+    )
+    await client.query(
+      `UPDATE contador_dia SET proximo = proximo + 1 WHERE data = $1`,
+      [HOJE()]
+    )
+    await client.query('COMMIT')
+    return `A-${String(row.proximo).padStart(3, '0')}`
+  } catch (e) {
+    await client.query('ROLLBACK')
+    throw e
+  } finally {
+    client.release()
+  }
+}
+
+async function criarOrdem({ itens, total, chaveNfce, origem }) {
+  const senha   = await proximaSenha()
+  const qr1Code = qrId()
+  const qr2Code = qrId()
   const agora   = AGORA()
 
-  const result = db.prepare(`
-    INSERT INTO ordens (senha, status, qr1_code, qr2_code, itens, chave_nfce, total, origem, criado_em, atualizado_em)
-    VALUES (?, 'NOVO', ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(senha, qr1Code, qr2Code, JSON.stringify(itens), chaveNfce || null, total || 0, origem || 'totem', agora, agora)
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO ordens (senha, status, qr1_code, qr2_code, itens, chave_nfce, total, origem, criado_em, atualizado_em)
+     VALUES ($1, 'NOVO', $2, $3, $4, $5, $6, $7, $8, $8)
+     RETURNING id`,
+    [senha, qr1Code, qr2Code, JSON.stringify(itens), chaveNfce || null, total || 0, origem || 'totem', agora]
+  )
 
-  return { id: result.lastInsertRowid, senha, qr1Code, qr2Code, status: 'NOVO' }
+  return { id: row.id, senha, qr1Code, qr2Code, status: 'NOVO' }
 }
 
-/**
- * Lista ordens ativas (status != ENTREGUE), ordenadas por criação.
- */
-function listarAtivas() {
-  return db.prepare(`SELECT * FROM ordens WHERE status != 'ENTREGUE' ORDER BY criado_em ASC`).all()
+async function listarAtivas() {
+  const { rows } = await pool.query(
+    `SELECT * FROM ordens WHERE status != 'ENTREGUE' ORDER BY criado_em ASC`
+  )
+  return rows
 }
 
-/**
- * Lista ordens para painel TV (SEPARANDO e CHAMADO).
- */
-function listarTV() {
-  return db.prepare(`SELECT id, senha, status FROM ordens WHERE status IN ('SEPARANDO','CHAMADO') ORDER BY criado_em ASC`).all()
+async function listarTV() {
+  const { rows } = await pool.query(
+    `SELECT id, senha, status FROM ordens WHERE status IN ('SEPARANDO','CHAMADO') ORDER BY criado_em ASC`
+  )
+  return rows
 }
 
-/**
- * Busca ordem por ID.
- */
-function buscarPorId(id) {
-  return db.prepare(`SELECT * FROM ordens WHERE id = ?`).get(id)
+async function buscarPorId(id) {
+  const { rows: [row] } = await pool.query(`SELECT * FROM ordens WHERE id = $1`, [id])
+  return row || null
 }
 
-/**
- * Atualiza status de uma ordem.
- */
-function atualizarStatus(id, novoStatus) {
-  const result = db.prepare(`UPDATE ordens SET status = ?, atualizado_em = ? WHERE id = ?`).run(novoStatus, AGORA(), id)
-  if (result.changes === 0) throw new Error(`Ordem ${id} não encontrada`)
+async function atualizarStatus(id, novoStatus) {
+  const { rowCount } = await pool.query(
+    `UPDATE ordens SET status = $1, atualizado_em = $2 WHERE id = $3`,
+    [novoStatus, AGORA(), id]
+  )
+  if (rowCount === 0) throw new Error(`Ordem ${id} não encontrada`)
   return buscarPorId(id)
 }
 
-/**
- * Processa scan de QR code (QR1 ou QR2).
- * Retorna { id, senha, status, acao }.
- */
-function scanQR(qrCode) {
-  // Tenta QR1 (separação) — válido apenas no status SEPARANDO
-  const porQR1 = db.prepare(`SELECT * FROM ordens WHERE qr1_code = ?`).get(qrCode)
+async function scanQR(qrCode) {
+  const { rows: [porQR1] } = await pool.query(
+    `SELECT * FROM ordens WHERE qr1_code = $1`, [qrCode]
+  )
   if (porQR1) {
-    if (porQR1.status !== 'SEPARANDO') {
+    if (porQR1.status !== 'SEPARANDO')
       throw new Error(`QR1 inválido: ordem ${porQR1.id} está em status ${porQR1.status}`)
-    }
-    atualizarStatus(porQR1.id, 'CHAMADO')
+    await atualizarStatus(porQR1.id, 'CHAMADO')
     return { id: porQR1.id, senha: porQR1.senha, status: 'CHAMADO', acao: 'chamado_na_tv', qr2Code: porQR1.qr2_code, operador: porQR1.operador }
   }
 
-  // Tenta QR2 (entrega) — válido apenas no status CHAMADO
-  const porQR2 = db.prepare(`SELECT * FROM ordens WHERE qr2_code = ?`).get(qrCode)
+  const { rows: [porQR2] } = await pool.query(
+    `SELECT * FROM ordens WHERE qr2_code = $1`, [qrCode]
+  )
   if (porQR2) {
-    if (porQR2.status !== 'CHAMADO') {
+    if (porQR2.status !== 'CHAMADO')
       throw new Error(`QR2 inválido: ordem ${porQR2.id} está em status ${porQR2.status}`)
-    }
-    atualizarStatus(porQR2.id, 'ENTREGUE')
+    await atualizarStatus(porQR2.id, 'ENTREGUE')
     return { id: porQR2.id, senha: porQR2.senha, status: 'ENTREGUE', acao: 'entregue' }
   }
 
   throw new Error('QR code não encontrado')
 }
 
-/**
- * Lista todas as ordens (admin).
- */
-function listarTodas() {
-  return db.prepare(`SELECT * FROM ordens ORDER BY criado_em DESC`).all()
+async function listarTodas() {
+  const { rows } = await pool.query(`SELECT * FROM ordens ORDER BY criado_em DESC`)
+  return rows
 }
 
-/**
- * Cancela uma ordem (volta para NOVO, sem operador).
- */
-function cancelarOrdem(id) {
-  db.prepare(`UPDATE ordens SET status = 'NOVO', operador = NULL, atualizado_em = ? WHERE id = ?`).run(AGORA(), id)
+async function cancelarOrdem(id) {
+  const { rowCount } = await pool.query(
+    `UPDATE ordens SET status = 'NOVO', operador = NULL, atualizado_em = $1 WHERE id = $2`,
+    [AGORA(), id]
+  )
+  if (rowCount === 0) throw new Error(`Ordem ${id} não encontrada`)
   return buscarPorId(id)
 }
 
-/**
- * Atribui uma ordem a um operador e muda status para SEPARANDO.
- */
-function atribuirOperador(id, operador) {
-  db.prepare(`UPDATE ordens SET operador = ?, status = 'SEPARANDO', atualizado_em = ? WHERE id = ?`)
-    .run(operador, AGORA(), id)
+async function atribuirOperador(id, operador) {
+  await pool.query(
+    `UPDATE ordens SET operador = $1, status = 'SEPARANDO', atualizado_em = $2 WHERE id = $3`,
+    [operador, AGORA(), id]
+  )
   return buscarPorId(id)
 }
 
-/**
- * Retorna a próxima ordem NOVO sem operador atribuído (mais antiga primeiro).
- */
-function proximaOrdemNova() {
-  return db.prepare(`SELECT * FROM ordens WHERE status = 'NOVO' AND operador IS NULL ORDER BY criado_em ASC LIMIT 1`).get()
+async function proximaOrdemNova() {
+  const { rows: [row] } = await pool.query(
+    `SELECT * FROM ordens WHERE status = 'NOVO' AND operador IS NULL ORDER BY criado_em ASC LIMIT 1`
+  )
+  return row || null
 }
 
-/**
- * Retorna a ordem SEPARANDO atribuída ao operador N (ou null).
- */
-function ordemDoOperador(operador) {
-  return db.prepare(`SELECT * FROM ordens WHERE status = 'SEPARANDO' AND operador = ? LIMIT 1`).get(operador)
+async function ordemDoOperador(operador) {
+  const { rows: [row] } = await pool.query(
+    `SELECT * FROM ordens WHERE status = 'SEPARANDO' AND operador = $1 LIMIT 1`,
+    [operador]
+  )
+  return row || null
 }
 
-/**
- * Conta ordens NOVO sem operador (na fila aguardando).
- */
-function contarNaFila() {
-  return db.prepare(`SELECT COUNT(*) AS total FROM ordens WHERE status = 'NOVO' AND operador IS NULL`).get().total
+async function contarNaFila() {
+  const { rows: [row] } = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM ordens WHERE status = 'NOVO' AND operador IS NULL`
+  )
+  return row.total
 }
 
-/**
- * Reseta o contador do dia (admin).
- */
-function resetarContador() {
-  db.prepare(`DELETE FROM contador_dia WHERE data = ?`).run(HOJE())
+async function resetarContador() {
+  await pool.query(`DELETE FROM contador_dia WHERE data = $1`, [HOJE()])
 }
 
-function limparTudo() {
-  db.prepare(`DELETE FROM ordens`).run()
-  db.prepare(`DELETE FROM contador_dia`).run()
+async function limparTudo() {
+  await pool.query(`DELETE FROM ordens`)
+  await pool.query(`DELETE FROM contador_dia`)
 }
 
-module.exports = { criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus, scanQR, listarTodas, cancelarOrdem, resetarContador, atribuirOperador, proximaOrdemNova, ordemDoOperador, contarNaFila, limparTudo }
+async function buscarPorQr2(qr2Code) {
+  const { rows: [row] } = await pool.query(
+    `SELECT id, senha, status, criado_em FROM ordens WHERE qr2_code = $1`,
+    [qr2Code]
+  )
+  return row || null
+}
+
+module.exports = {
+  criarOrdem, listarAtivas, listarTV, buscarPorId, atualizarStatus,
+  scanQR, listarTodas, cancelarOrdem, resetarContador, atribuirOperador,
+  proximaOrdemNova, ordemDoOperador, contarNaFila, limparTudo, buscarPorQr2,
+}

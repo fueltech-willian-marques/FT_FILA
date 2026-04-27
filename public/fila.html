@@ -66,13 +66,47 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const params = new URLSearchParams(location.search)
-  const minha  = (params.get('senha') || '').toUpperCase()
+  const token  = params.get('token')   // preferencial: token opaco (qr2Code UUID)
+  const senhaParam = (params.get('senha') || '').toUpperCase()  // legado
+  let   minha  = senhaParam
   let   pronto = false
 
-  document.getElementById('header-senha').textContent = minha || '—'
-  document.getElementById('pronto-senha').textContent  = minha
-
   const socket = io()
+
+  function iniciar() {
+    document.getElementById('header-senha').textContent = minha || '—'
+    document.getElementById('pronto-senha').textContent = minha
+
+    atualizar()
+
+    socket.on('fila:nova',       atualizar)
+    socket.on('fila:atualizada', atualizar)
+    socket.on('fila:rechamada',  atualizar)
+
+    socket.on('fila:entregue', ({ senha }) => {
+      if (minha && senha && senha.toUpperCase() === minha) {
+        mostrarPronto()
+      } else {
+        atualizar()
+      }
+    })
+  }
+
+  // Se veio com token, resolve para a senha antes de iniciar
+  if (token) {
+    fetch(`/api/fila/view/${token}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          minha = (data.senha || '').toUpperCase()
+          if (data.status === 'CHAMADO') mostrarPronto()
+        }
+        iniciar()
+      })
+      .catch(() => iniciar())
+  } else {
+    iniciar()
+  }
 
   function render(ordens) {
     if (pronto) return
@@ -115,20 +149,6 @@
       .then(render)
       .catch(() => {})
   }
-
-  atualizar()
-
-  socket.on('fila:nova',       atualizar)
-  socket.on('fila:atualizada', atualizar)
-  socket.on('fila:rechamada',  atualizar)
-
-  socket.on('fila:entregue', ({ senha }) => {
-    if (minha && senha && senha.toUpperCase() === minha) {
-      mostrarPronto()
-    } else {
-      atualizar()
-    }
-  })
 </script>
 </body>
 </html>
