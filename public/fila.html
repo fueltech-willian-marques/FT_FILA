@@ -90,8 +90,14 @@
       div.className = `card ${tipo}${isMeu ? ' meu' : ''}`
       const badgeText = isMeu ? 'SEU PEDIDO'
                       : (tipo === 'separando' ? 'Em Separação' : 'Chamado')
-      div.innerHTML = `<div class="badge">${badgeText}</div>
-                       <div class="senha-text">${o.senha}</div>`
+      const badge = document.createElement('div')
+      badge.className = 'badge'
+      badge.textContent = badgeText
+      const senhaEl = document.createElement('div')
+      senhaEl.className = 'senha-text'
+      senhaEl.textContent = o.senha
+      div.appendChild(badge)
+      div.appendChild(senhaEl)
       lista.appendChild(div)
     })
   }
