@@ -179,8 +179,37 @@ powercfg /change hibernate-timeout-ac 0
 powercfg /change monitor-timeout-ac  0
 Ok "Suspensao desabilitada"
 
-# -- 6. printer.ini - configurar impressora ----------------------------------
-Log "6. Configurando printer.ini do agent..."
+# -- 6. Atalhos na area de trabalho ------------------------------------------
+Log "6. Criando atalhos na area de trabalho..."
+
+$chrome   = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
+$chrome86 = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+$chromePath = $null
+foreach ($c in @($chrome, $chrome86)) { if (Test-Path $c) { $chromePath = $c; break } }
+if (-not $chromePath) {
+    $found = Get-Command "chrome.exe" -ErrorAction SilentlyContinue
+    if ($found) { $chromePath = $found.Source }
+    else        { $chromePath = $chrome; Log "  Aviso: Chrome nao encontrado - instale e os atalhos funcionarao" }
+}
+
+$desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+$wsh     = New-Object -ComObject WScript.Shell
+
+$atalhos = @(
+    @{ Nome = "FT FILA - TV";        URL = "$SERVIDOR_URL/tv.html"         },
+    @{ Nome = "FT FILA - Separacao"; URL = "$SERVIDOR_URL/expedicao.html"  },
+    @{ Nome = "FT FILA - Entrega";   URL = "$SERVIDOR_URL/entrega.html"    }
+)
+foreach ($a in $atalhos) {
+    $link = $wsh.CreateShortcut("$desktop\$($a.Nome).lnk")
+    $link.TargetPath = $chromePath
+    $link.Arguments  = "--new-window --start-maximized `"$($a.URL)`""
+    $link.Save()
+}
+Ok "Atalhos criados: FT FILA - TV, Separacao, Entrega"
+
+# -- 7. printer.ini - configurar impressora ----------------------------------
+Log "7. Configurando printer.ini do agent..."
 $printerIni = "$AGENT_DEST\config\printer.ini"
 
 # Criar config/ e printer.ini padrao se nao existir (ex: share sem o arquivo)
@@ -219,11 +248,11 @@ Log "  Servico:           $AGENT_SVC  (auto-start)"
 Log "  Log agent:         $AGENT_DEST\agent.log"
 Log "  Log instalacao:    $LOG_FILE"
 Log ""
-Log "Paineis:"
-Log "  Expedicao: $SERVIDOR_URL/expedicao.html"
-Log "  Entrega:   $SERVIDOR_URL/entrega.html"
-Log "  TV Senhas: $SERVIDOR_URL/tv.html"
-Log "  Admin:     $SERVIDOR_URL/admin.html"
+Log "Paineis (atalhos criados na area de trabalho):"
+Log "  FT FILA - TV        -> $SERVIDOR_URL/tv.html"
+Log "  FT FILA - Separacao -> $SERVIDOR_URL/expedicao.html"
+Log "  FT FILA - Entrega   -> $SERVIDOR_URL/entrega.html"
+Log "  Admin:                 $SERVIDOR_URL/admin.html"
 Log ""
 
 Start-Sleep -Seconds 3
