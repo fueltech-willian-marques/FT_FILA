@@ -26,138 +26,131 @@
 │  PC de Expedição          │          │  PC de Entrega            │
 │  Chrome → :4100/expedicao │          │  Chrome → :4100/entrega  │
 │                           │          │                           │
-│  ft-fila-agent (porta 4002)│         │  ft-fila-agent (porta 4002)│
+│  ft-fila-agent :4002      │          │  ft-fila-agent :4002      │
+│  printer.ini (individual) │          │  printer.ini (individual) │
 │  Impressora: COM?         │          │  Impressora: COM?         │
 └──────────────────────────┘          └──────────────────────────┘
 ```
+
+**Regras:**
+- O **servidor roda sempre no Windows Server** — SQLite, Socket.IO, painéis HTML.
+- Cada máquina (expedição/entrega) roda o **ft-fila-agent** (porta 4002) para controlar sua impressora local.
+- A TV de senhas **não precisa de agent** — apenas Chrome apontando para `:4100/tv.html`.
+
+---
+
+## Scripts Disponíveis
+
+| Script | Local | Uso |
+|--------|-------|-----|
+| `instalar-fila-agent.ps1` | `\\serverfs01\Publico\TI\Willian\totem\FT_FILA\` | Instalação completa do agent (primeira vez) |
+| `atualizar-fila-agent.ps1` | `\\serverfs01\Publico\TI\Willian\totem\FT_FILA\` | Atualização do agent preservando printer.ini |
 
 ---
 
 ## Parte 1 — Instalar o Servidor FT_FILA
 
-> O servidor FT_FILA já está instalado como parte do servidor central FuelTech.
-> Seguir estas etapas apenas se estiver configurando um servidor do zero.
+> O servidor FT_FILA já está instalado no Windows Server como parte da infraestrutura FuelTech.
+> Seguir estas etapas apenas ao configurar um servidor do zero.
 
-Ver guia completo em: [INSTALACAO-SERVIDOR.md](../FT_PDV/INSTALACAO-SERVIDOR.md)
-
-**Resumo:**
 ```powershell
 # 1. Copiar arquivos para o servidor
 robocopy "FT_FILA" "\\10.100.62.21\c$\Fueltech_PDV\FT_FILA" /E /XD node_modules .git
 
-# 2. Instalar dependências
-ssh administrator@10.100.62.21
-Set-Location C:\Fueltech_PDV\FT_FILA
+# 2. Instalar dependências (via SSH ou RDP no servidor)
+cd C:\Fueltech_PDV\FT_FILA
 & "C:\Program Files\nodejs\npm.cmd" install --omit=dev
 
 # 3. Criar serviço Windows (NSSM)
 $n = "C:\ProgramData\chocolatey\lib\NSSM\tools\nssm.exe"
 & $n install FT_FILA "C:\Program Files\nodejs\node.exe" "C:\Fueltech_PDV\FT_FILA\src\server.js"
 & $n set FT_FILA AppDirectory "C:\Fueltech_PDV\FT_FILA"
-& $n set FT_FILA Start SERVICE_AUTO_START
+& $n set FT_FILA AppStdout    "C:\Fueltech_PDV\FT_FILA\ft-fila.log"
+& $n set FT_FILA AppStderr    "C:\Fueltech_PDV\FT_FILA\ft-fila-err.log"
+& $n set FT_FILA Start        SERVICE_AUTO_START
 Start-Service FT_FILA
 ```
 
 ---
 
-## Parte 2 — Instalar ft-fila-agent (por máquina)
+## Parte 2 — Instalar ft-fila-agent (por máquina com impressora)
 
 O agent deve ser instalado em **cada máquina** que tem impressora física:
 - PC de Expedição (imprime lista de itens + QR1)
 - PC de Entrega (imprime etiqueta + QR2)
 
-### 2.1. Pré-requisitos
+### Instalação Automática (recomendado)
 
-- Windows 10/11 64-bit
-- Node.js 18+ instalado: https://nodejs.org/
-- Impressora térmica conectada via USB/serial (ex: Bematech MP-4200 TH em COM9)
+Abrir **PowerShell como Administrador** na máquina e executar:
 
-### 2.2. Copiar arquivos do agent
-
-Copiar a pasta `FT_FILA\agent\` para a máquina local:
-```
-C:\Fueltech_FILA-agent\
+```powershell
+powershell -ExecutionPolicy Bypass -File "\\serverfs01\Publico\TI\Willian\totem\FT_FILA\instalar-fila-agent.ps1"
 ```
 
-### 2.3. Instalar dependências
+O script instala automaticamente:
+- Node.js 20 LTS (se não instalado)
+- ft-fila-agent como serviço Windows (auto-start, porta 4002)
+- Suspensão desabilitada
+- Abre `printer.ini` no Notepad para configurar a porta COM
 
-```cmd
-cd C:\Fueltech_FILA-agent
-npm install --omit=dev
+### Via pendrive
+
+Copiar para o pendrive os seguintes itens:
+
+```
+instalar-fila-agent.ps1
+agent\                    ← pasta completa
 ```
 
-### 2.4. Configurar impressora
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\instalar-fila-agent.ps1
+```
 
-Editar `C:\Fueltech_FILA-agent\config\printer.ini`:
+### Configurar printer.ini
+
+Arquivo em: `C:\Fueltech_PDV\fila-agent\config\printer.ini`
 
 ```ini
 [Impressora]
-Porta=COM9         ; ajustar para a porta COM correta
-BaudRate=115200    ; para Bematech MP-4200 TH
-Colunas=48
 Modelo=Bematech_MP4200TH
+Porta=COM9          ; ajustar para a porta COM correta
+BaudRate=115200
+Colunas=48
 ```
 
 > Para descobrir a porta COM: Gerenciador de Dispositivos → Portas (COM e LPT).
 
-### 2.5. Testar o agent
+---
 
-```cmd
-node C:\Fueltech_FILA-agent\server.js
-```
+## Parte 3 — Atualização do Agent (após mudanças no código)
 
-Deve mostrar:
-```
-╔═══════════════════════════════════════╗
-║  FT_FILA Agent — http://localhost:4002  ║
-╚═══════════════════════════════════════╝
-```
+Use `atualizar-fila-agent.ps1` para atualizar o ft-fila-agent sem reinstalar.
+**Preserva `printer.ini` e logs** — não altera a configuração da máquina.
 
-### 2.6. Criar serviço Windows (auto-start)
-
-**Com NSSM (recomendado):**
 ```powershell
-# Instalar NSSM primeiro se não instalado:
-# choco install nssm -y  OU  baixar de https://nssm.cc/download
-
-$n = "C:\path\to\nssm.exe"
-$node = "C:\Program Files\nodejs\node.exe"
-& $n install FT_FILA_Agent $node "C:\Fueltech_FILA-agent\server.js"
-& $n set FT_FILA_Agent AppDirectory "C:\Fueltech_FILA-agent"
-& $n set FT_FILA_Agent AppStdout "C:\Fueltech_FILA-agent\agent.log"
-& $n set FT_FILA_Agent AppStderr "C:\Fueltech_FILA-agent\agent-err.log"
-& $n set FT_FILA_Agent Start SERVICE_AUTO_START
-Start-Service FT_FILA_Agent
-```
-
-**Com Task Scheduler (alternativa):**
-```powershell
-schtasks /create /tn "FT_FILA Agent" `
-  /tr "`"C:\Program Files\nodejs\node.exe`" C:\Fueltech_FILA-agent\server.js" `
-  /sc ONSTART /delay 0000:15 /rl HIGHEST /f
+# Abrir PowerShell como Administrador na máquina
+powershell -ExecutionPolicy Bypass -File "\\serverfs01\Publico\TI\Willian\totem\FT_FILA\atualizar-fila-agent.ps1"
 ```
 
 ---
 
-## Parte 3 — Configurar Painéis nos Navegadores
+## Parte 4 — Configurar Painéis nos Navegadores
 
 ### PC de Expedição
 
-Abrir Chrome e navegar para:
 ```
 http://10.100.62.21:4100/expedicao.html
 ```
 
-Criar atalho na área de trabalho ou configurar auto-start.
+Criar atalho na área de trabalho. Pode configurar Chrome para abrir esta URL na inicialização.
 
 ### PC de Entrega
 
-Abrir Chrome e navegar para:
 ```
 http://10.100.62.21:4100/entrega.html
 ```
 
-### TV de Senhas (painel externo)
+### TV de Senhas (painel externo — sem agent)
 
 Qualquer TV ou monitor com Chrome:
 ```
@@ -166,7 +159,6 @@ http://10.100.62.21:4100/tv.html
 
 ### Painel Admin
 
-Acesso via rede para gerenciamento:
 ```
 http://10.100.62.21:4100/admin.html
 ```
@@ -180,11 +172,10 @@ http://10.100.62.21:4100/admin.html
 Get-Service FT_FILA
 
 # No servidor: verificar porta 4100
-netstat -an | findstr 4100
+Invoke-RestMethod http://10.100.62.21:4100/api/fila/status
 
-# Nos PCs: verificar agent na porta 4002
-netstat -an | findstr 4002
-# Ou: Invoke-RestMethod http://localhost:4002/health
+# Nas máquinas de expedição/entrega: verificar agent
+Invoke-RestMethod http://localhost:4002/health
 ```
 
 ---
@@ -217,8 +208,9 @@ netstat -an | findstr 4002
 
 | Problema | Causa Provável | Solução |
 |----------|---------------|---------|
-| Painel não abre | Servidor offline | Verificar `Get-Service FT_FILA` no servidor |
-| Impressora não imprime | Agent não rodando | Verificar `Get-Service FT_FILA_Agent` na máquina |
+| Painel não abre | Servidor offline | `Get-Service FT_FILA` no servidor |
+| Impressora não imprime | Agent não rodando | `Get-Service FT_FILA_Agent` na máquina |
 | Porta COM incorreta | printer.ini errado | Gerenciador de Dispositivos → checar porta |
 | QR code não reconhecido | Status inválido | Admin → cancelar ordem e recriar |
 | Senhas não aparecem na TV | WebSocket caiu | Recarregar página (F5) |
+| Agent não sobe | Log de erro | `C:\Fueltech_PDV\fila-agent\agent-err.log` |

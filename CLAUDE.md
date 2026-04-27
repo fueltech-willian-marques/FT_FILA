@@ -227,6 +227,17 @@ fila.ini [Impressora].PrintProxyUrl=http://localhost:4000
 Quando `PrintProxyUrl` está definido, as impressões são delegadas ao FT_PDV backend.
 Quando vazio, o ft-fila-agent usa a porta COM configurada em `agent/config/printer.ini`.
 
+### Modelos de impressora suportados
+
+| Modelo | Corte | BaudRate padrão | Conexão |
+|--------|-------|-----------------|---------|
+| `Bematech_MP4200TH` | `ESC m` (proprietário) — 10 linhas de avanço | 115200 | Serial / USB-CDC |
+| `ElginI9` | `GS V 0` (padrão ESC/POS) — 5 linhas de avanço | 9600 | USB-CDC (aparece como COM) |
+
+A Elgin i9 conectada via USB cria uma porta COM virtual (USB-CDC). Identificar a porta em **Gerenciador de Dispositivos → Portas (COM e LPT)**.
+
+Configurado em `agent/config/printer.ini` — o agent relê ao iniciar (reiniciar após alteração).
+
 ---
 
 ## Configuração — `config/fila.ini`
@@ -278,11 +289,26 @@ PrintProxyUrl=http://localhost:4000   ; vazio = impressora própria
 - [x] ft-fila-agent (agente local de impressão por máquina)
 - [x] Impressão delegada via Socket.IO (servidor → browser → agent)
 - [x] health check `/api/fila/status`
+- [x] `instalar-fila-agent.ps1` — instalador automático do agent (Node.js + NSSM + printer.ini)
+- [x] `atualizar-fila-agent.ps1` — atualizador do agent preservando printer.ini e logs
+- [x] Suporte a múltiplos modelos de impressora: `Bematech_MP4200TH` e `ElginI9` (campo `Modelo` no `printer.ini`)
+
+## Scripts de deploy
+
+| Script | Onde fica | Uso |
+|--------|-----------|-----|
+| `instalar-fila-agent.ps1` | `\\serverfs01\Publico\TI\Willian\totem\FT_FILA\` | Primeira instalação do agent |
+| `atualizar-fila-agent.ps1` | `\\serverfs01\Publico\TI\Willian\totem\FT_FILA\` | Atualização preservando config |
+
+**Agent destino:** `C:\Fueltech_PDV\fila-agent\`
+**Config impressora:** `C:\Fueltech_PDV\fila-agent\config\printer.ini`
+**Serviço Windows:** `FT_FILA_Agent` (NSSM ou Task Scheduler, auto-start)
 
 ## O que ainda falta / próximos passos
 
 - [ ] Instalar ft-fila-agent nas máquinas de expedição e entrega
-- [ ] Configurar impressoras locais (porta COM) em cada máquina
-- [ ] Testar fluxo completo com QR scan via câmera ou leitor
+  - Executar `instalar-fila-agent.ps1` como Administrador em cada PC
+  - Configurar `printer.ini` com a porta COM correta
+- [ ] Testar fluxo completo com QR scan via câmera ou leitor de código
 - [ ] Configurar rechamada automática após X minutos sem entrega
 - [ ] Relatórios de ordens por dia/período (painel admin)

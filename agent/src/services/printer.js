@@ -12,7 +12,7 @@ const { bufQRRaster } = require('./qrcode')
 // ── Lê config/printer.ini ─────────────────────────────────────────────────────
 function readPrinterIni() {
   const iniPath = path.join(__dirname, '../../config/printer.ini')
-  const defaults = { porta: 'COM3', baudRate: 115200, colunas: 48 }
+  const defaults = { porta: 'COM3', baudRate: 115200, colunas: 48, modelo: 'Bematech_MP4200TH' }
   try {
     const content = fs.readFileSync(iniPath, 'utf8')
     const result  = { ...defaults }
@@ -20,13 +20,15 @@ function readPrinterIni() {
       const m = line.match(/^\s*(\w+)\s*=\s*(.+)/)
       if (!m) continue
       const [, key, val] = m
-      if (key.toLowerCase() === 'porta')    result.porta    = val.trim()
-      if (key.toLowerCase() === 'baudrate') result.baudRate = parseInt(val.trim(), 10)
-      if (key.toLowerCase() === 'colunas')  result.colunas  = parseInt(val.trim(), 10)
+      const k = key.toLowerCase()
+      if (k === 'porta')    result.porta    = val.trim()
+      if (k === 'baudrate') result.baudRate = parseInt(val.trim(), 10)
+      if (k === 'colunas')  result.colunas  = parseInt(val.trim(), 10)
+      if (k === 'modelo')   result.modelo   = val.trim()
     }
     return result
   } catch {
-    console.warn('[printer:agent] printer.ini não encontrado — usando defaults')
+    console.warn('[printer:agent] printer.ini nao encontrado — usando defaults')
     return defaults
   }
 }
@@ -36,13 +38,20 @@ const COLS = cfg.colunas
 
 // ── ESC/POS constantes ────────────────────────────────────────────────────────
 const ESC      = 0x1B
+const GS       = 0x1D
 const CENTER   = Buffer.from([ESC, 0x61, 0x01])
 const LEFT     = Buffer.from([ESC, 0x61, 0x00])
 const BOLD_ON  = Buffer.from([ESC, 0x45, 0x01])
 const BOLD_OFF = Buffer.from([ESC, 0x45, 0x00])
 const BIG_ON   = Buffer.from([ESC, 0x21, 0x30])
 const BIG_OFF  = Buffer.from([ESC, 0x21, 0x00])
-const FEED_CUT = Buffer.from([ESC, 0x64, 0x0A, ESC, 0x6D])
+
+// Corte por modelo:
+//   Bematech_MP4200TH — ESC m (0x1B 0x6D) proprietário, 10 linhas de avanço
+//   ElginI9           — GS V 0 (0x1D 0x56 0x00) padrão ESC/POS, 5 linhas de avanço
+const FEED_CUT = cfg.modelo === 'ElginI9'
+  ? Buffer.from([ESC, 0x64, 0x05, GS, 0x56, 0x00])
+  : Buffer.from([ESC, 0x64, 0x0A, ESC, 0x6D])
 
 function txt(s)         { return Buffer.from(s + '\n', 'latin1') }
 function line(ch = '-') { return txt(ch.repeat(COLS)) }
