@@ -232,9 +232,13 @@ Quando vazio, o ft-fila-agent usa a porta COM configurada em `agent/config/print
 | Modelo | Corte | BaudRate padrão | Conexão |
 |--------|-------|-----------------|---------|
 | `Bematech_MP4200TH` | `ESC m` (proprietário) — 10 linhas de avanço | 115200 | Serial / USB-CDC |
-| `ElginI9` | `GS V 0` (padrão ESC/POS) — 5 linhas de avanço | 9600 | USB-CDC (aparece como COM) |
+| `ElginI9` | `GS V 0` (padrão ESC/POS) — 5 linhas de avanço | 9600 | USB-CDC (COM) ou USB driver (USB001) |
 
-A Elgin i9 conectada via USB cria uma porta COM virtual (USB-CDC). Identificar a porta em **Gerenciador de Dispositivos → Portas (COM e LPT)**.
+**Tipos de porta suportados em `printer.ini`:**
+- `Porta=COM5` — porta serial ou USB-CDC (driver cria COM virtual). Usa `serialport`.
+- `Porta=USB001` — porta de impressora Windows instalada via driver. Usa `fs.createWriteStream('\\\\.\\USB001')` — escreve ESC/POS direto, sem spooler.
+
+Para saber qual porta: **Gerenciador de Dispositivos → Portas (COM e LPT)** (USB-CDC) ou **Impressoras e Scanners → propriedades → porta** (USB001/LPT).
 
 Configurado em `agent/config/printer.ini` — o agent relê ao iniciar (reiniciar após alteração).
 

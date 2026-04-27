@@ -56,7 +56,21 @@ const FEED_CUT = cfg.modelo === 'ElginI9'
 function txt(s)         { return Buffer.from(s + '\n', 'latin1') }
 function line(ch = '-') { return txt(ch.repeat(COLS)) }
 
+// Porta Windows (USB001, LPT1): escreve direto no device file sem serialport
+function isWindowsPort(porta) {
+  return /^USB\d+$/i.test(porta) || /^LPT\d+$/i.test(porta)
+}
+
 function writeToPort(data) {
+  if (isWindowsPort(cfg.porta)) {
+    return new Promise((resolve, reject) => {
+      const stream = fs.createWriteStream(`\\\\.\\${cfg.porta}`)
+      stream.on('error', reject)
+      stream.on('finish', resolve)
+      stream.write(data)
+      stream.end()
+    })
+  }
   return new Promise((resolve, reject) => {
     const sp = new SerialPort({ path: cfg.porta, baudRate: cfg.baudRate, autoOpen: false })
     let done = false
@@ -66,10 +80,10 @@ function writeToPort(data) {
       try { sp.close() } catch (_) {}
       if (err) { reject(err) } else { resolve() }
     }
-    const timer = setTimeout(() => finish(new Error('Timeout: porta serial não respondeu em 8s')), 8000)
+    const timer = setTimeout(() => finish(new Error('Timeout: porta serial nao respondeu em 8s')), 8000)
     sp.on('error', (err) => { console.warn('[printer:agent]', err.message); finish(err) })
     sp.open((err) => {
-      if (err) { clearTimeout(timer); return finish(new Error(`Não foi possível abrir ${cfg.porta}: ${err.message}`)) }
+      if (err) { clearTimeout(timer); return finish(new Error(`Nao foi possivel abrir ${cfg.porta}: ${err.message}`)) }
       sp.write(data, (err) => {
         if (err) { clearTimeout(timer); return finish(err) }
         sp.drain(() => { clearTimeout(timer); finish(null) })
