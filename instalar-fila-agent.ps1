@@ -46,13 +46,28 @@ Log ""
 
 # -- 1. Node.js 20 ------------------------------------------------------------
 Log "1. Verificando Node.js..."
-$nodeExe = "C:\Program Files\nodejs\node.exe"
+
+# Detectar node.exe em qualquer instalacao (PATH, NVM, pasta padrao)
+function Find-NodeExe {
+    $found = Get-Command "node.exe" -ErrorAction SilentlyContinue
+    if ($found) { return $found.Source }
+    $candidates = @(
+        "C:\Program Files\nodejs\node.exe",
+        "C:\nvm4w\nodejs\node.exe",
+        "C:\nvm\nodejs\node.exe",
+        "$env:APPDATA\nvm\nodejs\node.exe"
+    )
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+    return $null
+}
+
+$nodeExe = Find-NodeExe
 $npmCmd  = "C:\Program Files\nodejs\npm.cmd"
 $nodeOk  = $false
-if (Test-Path $nodeExe) {
+if ($nodeExe) {
     $ver = & $nodeExe --version 2>$null
-    if ($ver -match '^v20') { $nodeOk = $true; Ok "Node.js $ver ja instalado" }
-    else { Log "  Node.js encontrado mas versao $ver - reinstalando v20..." }
+    if ($ver -match '^v2[0-9]') { $nodeOk = $true; Ok "Node.js $ver em $nodeExe" }
+    else { Log "  Node.js $ver encontrado - versao antiga, instalando v20..." }
 }
 if (-not $nodeOk) {
     Log "  Baixando Node.js 20 LTS..."
@@ -63,15 +78,20 @@ if (-not $nodeOk) {
         Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn ADDLOCAL=ALL" -Wait
         Remove-Item $msi -Force
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-        Ok "Node.js instalado"
+        $nodeExe  = Find-NodeExe
+        if (-not $nodeExe) { Err "node.exe nao encontrado apos instalacao" }
+        Ok "Node.js instalado em $nodeExe"
     } catch {
         Err "Falha ao baixar/instalar Node.js: $_"
     }
 }
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-# Reatribuir npm apos refresh (necessario quando Node acabou de ser instalado)
+# Localizar npm apos refresh
 $found = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
 if ($found) { $npmCmd = $found.Source }
+elseif (Test-Path (Join-Path (Split-Path $nodeExe) "npm.cmd")) {
+    $npmCmd = Join-Path (Split-Path $nodeExe) "npm.cmd"
+}
 if (-not (Test-Path $npmCmd)) { Start-Sleep -Seconds 5 }
 
 # -- 2. Copiar ft-fila-agent --------------------------------------------------
